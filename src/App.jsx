@@ -623,10 +623,10 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-900">
+    <div className="min-h-screen bg-gray-900 overflow-x-hidden">
       {/* Header */}
-      <header className="bg-black text-white p-4 shadow-lg border-b-2 border-purple-600">
-        <div className="max-w-4xl mx-auto flex justify-between items-center">
+      <header className="bg-black/95 backdrop-blur-sm text-white shadow-lg border-b-2 border-purple-600 sticky top-0 z-40" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
+        <div className="max-w-4xl mx-auto flex justify-between items-center px-4 py-3">
           <div 
             className="flex items-center gap-3 cursor-pointer" 
             onClick={() => { setView('menu'); setIsAdmin(false); }}
@@ -675,7 +675,7 @@ export default function App() {
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto p-4">
+      <main className="max-w-4xl mx-auto px-4 py-4 pb-8" style={{ paddingBottom: 'max(2rem, env(safe-area-inset-bottom, 0px))' }}>
         {/* Menu View */}
         {view === 'menu' && (
           <div className="max-w-2xl mx-auto">
@@ -1756,53 +1756,52 @@ function MenuItem({ item, onAddToCart, formatPrice }) {
   
   return (
     <div className="bg-gray-800 rounded-lg p-4 shadow-lg border border-gray-700 hover:border-purple-500 transition-colors">
-      <div className="flex justify-between items-start">
-        <div className="flex items-start gap-3 flex-1">
-          <span className="text-3xl">{item.emoji}</span>
-          <div className="flex-1">
-            <div className="flex items-center gap-2">
-              <h3 className="font-semibold text-white">{item.name}</h3>
-              <span className="text-purple-300 font-medium">{formatPrice(item.price)}</span>
-            </div>
-            <p className="text-sm text-gray-400">{item.description}</p>
-            
-            {item.options && item.options.length > 0 && (
-              <select
-                value={selectedOption || ''}
-                onChange={(e) => setSelectedOption(e.target.value)}
-                className="mt-2 bg-gray-700 border border-gray-600 rounded px-2 py-1 text-white text-sm focus:border-purple-500 focus:outline-none"
-              >
-                {item.options.map(opt => (
-                  <option key={opt} value={opt}>{opt}</option>
-                ))}
-              </select>
-            )}
+      {/* Item info row */}
+      <div className="flex items-start gap-3 mb-3">
+        <span className="text-3xl flex-shrink-0">{item.emoji}</span>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h3 className="font-semibold text-white">{item.name}</h3>
+            <span className="text-purple-300 font-medium">{formatPrice(item.price)}</span>
           </div>
+          <p className="text-sm text-gray-400">{item.description}</p>
         </div>
-        
-        <div className="flex items-center gap-2 ml-3">
-          <div className="flex items-center bg-gray-700 rounded">
-            <button
-              onClick={() => setQuantity(Math.max(1, quantity - 1))}
-              className="w-11 h-11 text-white hover:bg-gray-600 rounded-l"
-            >
-              -
-            </button>
-            <span className="w-8 text-center text-white">{quantity}</span>
-            <button
-              onClick={() => setQuantity(quantity + 1)}
-              className="w-11 h-11 text-white hover:bg-gray-600 rounded-r"
-            >
-              +
-            </button>
-          </div>
-          <button
-            onClick={handleAddToCart}
-            className="bg-purple-600 hover:bg-purple-500 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+      </div>
+
+      {/* Controls row — always full-width, never clips */}
+      <div className="flex items-center gap-2">
+        {item.options && item.options.length > 0 && (
+          <select
+            value={selectedOption || ''}
+            onChange={(e) => setSelectedOption(e.target.value)}
+            className="flex-1 min-w-0 bg-gray-700 border border-gray-600 rounded px-2 py-2 text-white text-sm focus:border-purple-500 focus:outline-none"
           >
-            Add
+            {item.options.map(opt => (
+              <option key={opt} value={opt}>{opt}</option>
+            ))}
+          </select>
+        )}
+        <div className="flex items-center bg-gray-700 rounded flex-shrink-0">
+          <button
+            onClick={() => setQuantity(Math.max(1, quantity - 1))}
+            className="w-10 h-10 text-white hover:bg-gray-600 rounded-l text-lg"
+          >
+            -
+          </button>
+          <span className="w-7 text-center text-white text-sm">{quantity}</span>
+          <button
+            onClick={() => setQuantity(quantity + 1)}
+            className="w-10 h-10 text-white hover:bg-gray-600 rounded-r text-lg"
+          >
+            +
           </button>
         </div>
+        <button
+          onClick={handleAddToCart}
+          className="bg-purple-600 hover:bg-purple-500 text-white px-4 py-2 rounded-lg font-medium transition-colors flex-shrink-0"
+        >
+          Add
+        </button>
       </div>
     </div>
   );
