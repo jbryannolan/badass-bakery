@@ -43,7 +43,7 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState(null);
   const [userProfile, setUserProfile] = useState(null);
   const [authEmail, setAuthEmail] = useState('');
-  const [authMode, setAuthMode] = useState('magic'); // 'magic' | 'password' | 'signup'
+  const [authMode, setAuthMode] = useState('password'); // 'password' | 'magic'
   const [authPassword, setAuthPassword] = useState('');
   const [authLoading, setAuthLoading] = useState(false);
   const [authMessage, setAuthMessage] = useState('');
@@ -52,6 +52,9 @@ export default function App() {
   const [profilePhone, setProfilePhone] = useState('');
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileSaved, setProfileSaved] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [newPasswordSaving, setNewPasswordSaving] = useState(false);
+  const [newPasswordMessage, setNewPasswordMessage] = useState('');
 
   useEffect(() => {
     loadData();
@@ -200,12 +203,9 @@ export default function App() {
   const handlePasswordAuth = async () => {
     setAuthLoading(true);
     setAuthMessage('');
-    const { error } = authMode === 'signup'
-      ? await supabase.auth.signUp({ email: authEmail, password: authPassword })
-      : await supabase.auth.signInWithPassword({ email: authEmail, password: authPassword });
+    const { error } = await supabase.auth.signInWithPassword({ email: authEmail, password: authPassword });
     setAuthLoading(false);
     if (error) setAuthMessage('Error: ' + error.message);
-    else if (authMode === 'signup') setAuthMessage('Account created! Check your email to confirm.');
   };
 
   const handleSignOut = async () => {
@@ -216,6 +216,16 @@ export default function App() {
     setCustomerEmail('');
     setCustomerName('');
     setCustomerPhone('');
+  };
+
+  const handleSetPassword = async () => {
+    if (newPassword.length < 6) { setNewPasswordMessage('Error: Password must be at least 6 characters.'); return; }
+    setNewPasswordSaving(true);
+    setNewPasswordMessage('');
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    setNewPasswordSaving(false);
+    if (error) setNewPasswordMessage('Error: ' + error.message);
+    else { setNewPasswordMessage('Password set! You can now sign in with email + password.'); setNewPassword(''); }
   };
 
   const saveAdminEmail = async () => {
@@ -932,9 +942,9 @@ export default function App() {
             <p className="text-gray-400 text-sm mb-4">Save your info and see order history.</p>
 
             <div className="flex gap-2 mb-4">
-              {[{id:'magic',label:'Magic Link'},{id:'password',label:'Password'}].map(m => (
+              {[{id:'password',label:'Password'},{id:'magic',label:'Email Link'}].map(m => (
                 <button key={m.id} onClick={() => { setAuthMode(m.id); setAuthMessage(''); }}
-                  className={`flex-1 py-1.5 rounded text-sm font-medium ${authMode === m.id || (authMode === 'signup' && m.id === 'password') ? 'bg-purple-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}>
+                  className={`flex-1 py-1.5 rounded text-sm font-medium ${authMode === m.id ? 'bg-purple-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}>
                   {m.label}
                 </button>
               ))}
@@ -943,9 +953,13 @@ export default function App() {
             <input type="email" placeholder="Email" value={authEmail} onChange={e => setAuthEmail(e.target.value)}
               className="w-full bg-gray-700 border border-gray-600 rounded p-2 mb-3 text-white placeholder-gray-400 focus:border-purple-500 focus:outline-none" />
 
-            {(authMode === 'password' || authMode === 'signup') && (
+            {authMode === 'password' && (
               <input type="password" placeholder="Password" value={authPassword} onChange={e => setAuthPassword(e.target.value)}
                 className="w-full bg-gray-700 border border-gray-600 rounded p-2 mb-3 text-white placeholder-gray-400 focus:border-purple-500 focus:outline-none" />
+            )}
+
+            {authMode === 'magic' && (
+              <p className="text-gray-500 text-xs mb-3">We'll email you a sign-in link. First time? Use this to create your account, then set a password from your profile.</p>
             )}
 
             {authMessage && (
@@ -956,17 +970,8 @@ export default function App() {
               onClick={authMode === 'magic' ? handleMagicLink : handlePasswordAuth}
               disabled={authLoading || !authEmail.trim()}
               className="w-full bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white py-2 rounded-lg font-medium mb-3">
-              {authLoading ? 'Sending...' : authMode === 'magic' ? 'Send Magic Link' : authMode === 'signup' ? 'Create Account' : 'Sign In'}
+              {authLoading ? (authMode === 'magic' ? 'Sending...' : 'Signing in...') : authMode === 'magic' ? 'Send Email Link' : 'Sign In'}
             </button>
-
-            {(authMode === 'password' || authMode === 'signup') && (
-              <p className="text-center text-gray-500 text-xs mb-2">
-                {authMode === 'signup'
-                  ? <>Already have an account? <button onClick={() => setAuthMode('password')} className="text-purple-400 hover:underline">Sign in</button></>
-                  : <>No account? <button onClick={() => setAuthMode('signup')} className="text-purple-400 hover:underline">Create one</button></>
-                }
-              </p>
-            )}
 
             <button onClick={() => setView('menu')} className="w-full text-gray-500 text-sm mt-2 hover:text-gray-400">
               ← Continue without signing in
@@ -993,6 +998,29 @@ export default function App() {
               <button onClick={saveUserProfile} disabled={profileSaving}
                 className="bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white px-4 py-2 rounded-lg text-sm font-medium">
                 {profileSaving ? 'Saving...' : profileSaved ? 'Saved!' : 'Save Profile'}
+              </button>
+            </div>
+
+            {/* Set password */}
+            <div className="bg-gray-800 rounded-lg p-4 border border-gray-700 mb-6">
+              <h3 className="font-bold text-white mb-1">Password</h3>
+              <p className="text-gray-400 text-xs mb-3">Set a password so you can sign in directly next time - no email link needed.</p>
+              <input
+                type="password"
+                placeholder="New password (min 6 chars)"
+                value={newPassword}
+                onChange={e => { setNewPassword(e.target.value); setNewPasswordMessage(''); }}
+                className="w-full bg-gray-700 border border-gray-600 rounded p-2 mb-2 text-white placeholder-gray-400 focus:border-purple-500 focus:outline-none"
+              />
+              {newPasswordMessage && (
+                <p className={`text-xs mb-2 ${newPasswordMessage.startsWith('Error') ? 'text-red-400' : 'text-green-400'}`}>{newPasswordMessage}</p>
+              )}
+              <button
+                onClick={handleSetPassword}
+                disabled={newPasswordSaving || !newPassword.trim()}
+                className="bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white px-4 py-2 rounded-lg text-sm font-medium"
+              >
+                {newPasswordSaving ? 'Saving...' : 'Set Password'}
               </button>
             </div>
 
