@@ -58,15 +58,6 @@ export default function App() {
 
   useEffect(() => {
     loadData();
-    
-    const ordersSubscription = supabase
-      .channel('orders-channel')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => {
-        loadOrders();
-      })
-      .subscribe((status) => {
-        if (status === 'CHANNEL_ERROR') console.error('Realtime subscription failed');
-      });
 
     const { data: { subscription: authSubscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       const user = session?.user ?? null;
@@ -79,7 +70,6 @@ export default function App() {
     });
 
     return () => {
-      supabase.removeChannel(ordersSubscription);
       authSubscription.unsubscribe();
     };
   }, []);
@@ -1448,7 +1438,7 @@ export default function App() {
             <AdminNav activeView={view} onNavigate={setView} orders={orders} />
 
             {/* View Mode Tabs */}
-            <div className="flex gap-2 mb-4">
+            <div className="flex gap-2 mb-4 items-center">
               <button
                 onClick={() => setOrdersViewMode('calendar')}
                 className={`px-4 py-2 rounded-lg font-medium text-sm ${
@@ -1468,6 +1458,13 @@ export default function App() {
                 }`}
               >
                 📋 List
+              </button>
+              <button
+                onClick={loadOrders}
+                className="ml-auto px-3 py-2 rounded-lg text-sm bg-gray-700 text-gray-300 hover:bg-gray-600"
+                title="Refresh orders"
+              >
+                🔄
               </button>
             </div>
 
