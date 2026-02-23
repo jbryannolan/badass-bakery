@@ -86,10 +86,18 @@ export default function App() {
     setLoading(true);
     setError(null);
     try {
-      await Promise.all([loadItems(), loadOrders(), loadBlockedDates(), loadAdminEmail(), loadIsOpen()]);
+      const timeout = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Request timed out')), 10000)
+      );
+      await Promise.race([
+        Promise.all([loadItems(), loadOrders(), loadBlockedDates(), loadAdminEmail(), loadIsOpen()]),
+        timeout
+      ]);
     } catch (err) {
       console.error('Error loading data:', err);
-      setError('Failed to load data. Please refresh the page.');
+      setError(err.message === 'Request timed out'
+        ? 'Connection timed out. The server may be waking up - please try again in a moment.'
+        : 'Failed to load data. Please refresh the page.');
     }
     setLoading(false);
   };
