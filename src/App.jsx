@@ -40,6 +40,18 @@ export default function App() {
   const [lastOrder, setLastOrder] = useState(null);
   const [customerPhone, setCustomerPhone] = useState('');
   const [error, setError] = useState(null);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [userProfile, setUserProfile] = useState(null);
+  const [authEmail, setAuthEmail] = useState('');
+  const [authMode, setAuthMode] = useState('magic'); // 'magic' | 'password' | 'signup'
+  const [authPassword, setAuthPassword] = useState('');
+  const [authLoading, setAuthLoading] = useState(false);
+  const [authMessage, setAuthMessage] = useState('');
+  const [myOrders, setMyOrders] = useState([]);
+  const [profileName, setProfileName] = useState('');
+  const [profilePhone, setProfilePhone] = useState('');
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileSaved, setProfileSaved] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -51,8 +63,19 @@ export default function App() {
       })
       .subscribe();
 
+    const { data: { subscription: authSubscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      const user = session?.user ?? null;
+      setCurrentUser(user);
+      if (user) {
+        setCustomerEmail(user.email);
+        await loadUserProfile(user.id);
+        await loadMyOrders(user.email);
+      }
+    });
+
     return () => {
       supabase.removeChannel(ordersSubscription);
+      authSubscription.unsubscribe();
     };
   }, []);
 
@@ -133,6 +156,66 @@ export default function App() {
     const { error } = await supabase.from('settings').upsert({ key: 'is_open', value }, { onConflict: 'key' });
     if (error) { console.error('Error saving is_open:', error); return; }
     setIsOpen(value);
+  };
+
+  const loadUserProfile = async (userId) => {
+    const { data } = await supabase.from('profiles').select('*').eq('id', userId).single();
+    if (data) {
+      setUserProfile(data);
+      setProfileName(data.name || '');
+      setProfilePhone(data.phone || '');
+      if (data.name) setCustomerName(data.name);
+      if (data.phone) setCustomerPhone(data.phone);
+    }
+  };
+
+  const saveUserProfile = async () => {
+    if (!currentUser) return;
+    setProfileSaving(true);
+    const { error } = await supabase.from('profiles').upsert(
+      { id: currentUser.id, name: profileName.trim() || null, phone: profilePhone.trim() || null },
+      { onConflict: 'id' }
+    );
+    setProfileSaving(false);
+    if (!error) {
+      setUserProfile(prev => ({ ...prev, name: profileName.trim() || null, phone: profilePhone.trim() || null }));
+      setProfileSaved(true);
+      setTimeout(() => setProfileSaved(false), 2000);
+    }
+  };
+
+  const loadMyOrders = async (email) => {
+    const { data } = await supabase.from('orders').select('*').eq('customer_email', email).order('created_at', { ascending: false });
+    setMyOrders(data || []);
+  };
+
+  const handleMagicLink = async () => {
+    setAuthLoading(true);
+    setAuthMessage('');
+    const { error } = await supabase.auth.signInWithOtp({ email: authEmail, options: { emailRedirectTo: window.location.origin } });
+    setAuthLoading(false);
+    setAuthMessage(error ? 'Error: ' + error.message : 'Check your email for a sign-in link!');
+  };
+
+  const handlePasswordAuth = async () => {
+    setAuthLoading(true);
+    setAuthMessage('');
+    const { error } = authMode === 'signup'
+      ? await supabase.auth.signUp({ email: authEmail, password: authPassword })
+      : await supabase.auth.signInWithPassword({ email: authEmail, password: authPassword });
+    setAuthLoading(false);
+    if (error) setAuthMessage('Error: ' + error.message);
+    else if (authMode === 'signup') setAuthMessage('Account created! Check your email to confirm.');
+  };
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    setCurrentUser(null);
+    setUserProfile(null);
+    setMyOrders([]);
+    setCustomerEmail('');
+    setCustomerName('');
+    setCustomerPhone('');
   };
 
   const saveAdminEmail = async () => {
@@ -243,6 +326,14 @@ export default function App() {
 
     // Send confirmation emails (don't block on this)
     sendOrderEmails({ ...orderData, admin_email: adminEmail }).catch(err => console.error('Email error:', err));
+
+    // Update profile with latest name/phone for logged-in users
+    if (currentUser) {
+      supabase.from('profiles').upsert(
+        { id: currentUser.id, name: customerName.trim() || null, phone: customerPhone.trim() || null },
+        { onConflict: 'id' }
+      ).then(() => loadMyOrders(currentUser.email));
+    }
 
     setLastOrder({ ...orderData, items: orderItems });
     setCart([]);
@@ -555,6 +646,16 @@ export default function App() {
               </button>
             )}
             {!isAdmin && (
+              currentUser
+                ? <div className="flex items-center gap-2">
+                    <button onClick={() => setView('my-orders')} className="text-purple-400 text-sm hover:text-purple-300">
+                      {userProfile?.name ? userProfile.name.split(' ')[0] : currentUser.email.split('@')[0]}
+                    </button>
+                    <button onClick={handleSignOut} className="text-gray-400 text-xs hover:text-white">Sign out</button>
+                  </div>
+                : <button onClick={() => setView('customer-login')} className="text-purple-400 text-sm hover:text-purple-300">Sign in</button>
+            )}
+            {!isAdmin && (
               <button
                 onClick={() => setView('login')}
                 className="text-sm bg-purple-700 hover:bg-purple-600 px-3 py-1 rounded"
@@ -687,9 +788,16 @@ export default function App() {
                 type="email"
                 placeholder="Email address *"
                 value={customerEmail}
-                onChange={(e) => setCustomerEmail(e.target.value)}
-                className="w-full bg-gray-700 border border-gray-600 rounded p-2 mb-3 text-white placeholder-gray-400 focus:border-purple-500 focus:outline-none"
+                onChange={(e) => !currentUser && setCustomerEmail(e.target.value)}
+                readOnly={!!currentUser}
+                className={`w-full bg-gray-700 border border-gray-600 rounded p-2 mb-1 text-white placeholder-gray-400 focus:outline-none ${currentUser ? 'opacity-60 cursor-not-allowed' : 'focus:border-purple-500'}`}
               />
+              {!currentUser && (
+                <p className="text-gray-500 text-xs mb-3">
+                  <button onClick={() => setView('customer-login')} className="text-purple-400 hover:underline">Sign in</button> to save your info and see order history.
+                </p>
+              )}
+              {currentUser && <div className="mb-3" />}
 
               <input
                 type="tel"
@@ -814,6 +922,115 @@ export default function App() {
                 Back to Menu
               </button>
             </div>
+          </div>
+        )}
+
+        {/* Customer Sign In */}
+        {view === 'customer-login' && (
+          <div className="max-w-sm mx-auto mt-12 bg-gray-800 rounded-lg p-6 border border-gray-700">
+            <h2 className="text-xl font-bold text-white mb-1">Sign in</h2>
+            <p className="text-gray-400 text-sm mb-4">Save your info and see order history.</p>
+
+            <div className="flex gap-2 mb-4">
+              {[{id:'magic',label:'Magic Link'},{id:'password',label:'Password'}].map(m => (
+                <button key={m.id} onClick={() => { setAuthMode(m.id); setAuthMessage(''); }}
+                  className={`flex-1 py-1.5 rounded text-sm font-medium ${authMode === m.id || (authMode === 'signup' && m.id === 'password') ? 'bg-purple-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}>
+                  {m.label}
+                </button>
+              ))}
+            </div>
+
+            <input type="email" placeholder="Email" value={authEmail} onChange={e => setAuthEmail(e.target.value)}
+              className="w-full bg-gray-700 border border-gray-600 rounded p-2 mb-3 text-white placeholder-gray-400 focus:border-purple-500 focus:outline-none" />
+
+            {(authMode === 'password' || authMode === 'signup') && (
+              <input type="password" placeholder="Password" value={authPassword} onChange={e => setAuthPassword(e.target.value)}
+                className="w-full bg-gray-700 border border-gray-600 rounded p-2 mb-3 text-white placeholder-gray-400 focus:border-purple-500 focus:outline-none" />
+            )}
+
+            {authMessage && (
+              <p className={`text-sm mb-3 ${authMessage.startsWith('Error') ? 'text-red-400' : 'text-green-400'}`}>{authMessage}</p>
+            )}
+
+            <button
+              onClick={authMode === 'magic' ? handleMagicLink : handlePasswordAuth}
+              disabled={authLoading || !authEmail.trim()}
+              className="w-full bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white py-2 rounded-lg font-medium mb-3">
+              {authLoading ? 'Sending...' : authMode === 'magic' ? 'Send Magic Link' : authMode === 'signup' ? 'Create Account' : 'Sign In'}
+            </button>
+
+            {(authMode === 'password' || authMode === 'signup') && (
+              <p className="text-center text-gray-500 text-xs mb-2">
+                {authMode === 'signup'
+                  ? <>Already have an account? <button onClick={() => setAuthMode('password')} className="text-purple-400 hover:underline">Sign in</button></>
+                  : <>No account? <button onClick={() => setAuthMode('signup')} className="text-purple-400 hover:underline">Create one</button></>
+                }
+              </p>
+            )}
+
+            <button onClick={() => setView('menu')} className="w-full text-gray-500 text-sm mt-2 hover:text-gray-400">
+              ← Continue without signing in
+            </button>
+          </div>
+        )}
+
+        {/* My Orders / Account */}
+        {view === 'my-orders' && currentUser && (
+          <div className="max-w-lg mx-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold text-white">My Account</h2>
+              <button onClick={() => setView('menu')} className="text-gray-400 text-sm hover:text-white">← Menu</button>
+            </div>
+
+            {/* Profile card */}
+            <div className="bg-gray-800 rounded-lg p-4 border border-gray-700 mb-6">
+              <h3 className="font-bold text-white mb-3">Profile</h3>
+              <p className="text-gray-400 text-xs mb-3">{currentUser.email}</p>
+              <input type="text" placeholder="Your name" value={profileName} onChange={e => setProfileName(e.target.value)}
+                className="w-full bg-gray-700 border border-gray-600 rounded p-2 mb-2 text-white placeholder-gray-400 focus:border-purple-500 focus:outline-none" />
+              <input type="tel" placeholder="Phone (optional)" value={profilePhone} onChange={e => setProfilePhone(e.target.value)}
+                className="w-full bg-gray-700 border border-gray-600 rounded p-2 mb-3 text-white placeholder-gray-400 focus:border-purple-500 focus:outline-none" />
+              <button onClick={saveUserProfile} disabled={profileSaving}
+                className="bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white px-4 py-2 rounded-lg text-sm font-medium">
+                {profileSaving ? 'Saving...' : profileSaved ? 'Saved!' : 'Save Profile'}
+              </button>
+            </div>
+
+            {/* Order history */}
+            <h3 className="font-bold text-white mb-3">Order History</h3>
+            {myOrders.length === 0
+              ? <p className="text-gray-400 text-sm">No orders yet.</p>
+              : myOrders.map(order => (
+                  <div key={order.id} className="bg-gray-800 rounded-lg p-4 border border-gray-700 mb-3">
+                    <div className="flex justify-between items-start mb-2">
+                      <div>
+                        <p className="text-white font-medium text-sm">
+                          {order.requested_date
+                            ? new Date(order.requested_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                            : 'Date TBD'}
+                        </p>
+                        <p className="text-gray-400 text-xs">Ordered {new Date(order.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-purple-400 font-medium text-sm">{formatPrice(order.total)}</p>
+                        <div className="flex gap-1 mt-1 justify-end">
+                          <span className={`text-xs px-2 py-0.5 rounded-full ${order.is_fulfilled ? 'bg-green-900 text-green-300' : 'bg-yellow-900 text-yellow-300'}`}>
+                            {order.is_fulfilled ? 'Fulfilled' : 'Pending'}
+                          </span>
+                          <span className={`text-xs px-2 py-0.5 rounded-full ${order.is_paid ? 'bg-green-900 text-green-300' : 'bg-orange-900 text-orange-300'}`}>
+                            {order.is_paid ? 'Paid' : 'Unpaid'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    <ul className="text-gray-300 text-sm">
+                      {(order.items || []).map((item, idx) => (
+                        <li key={idx}>{item.emoji} {item.name}{item.selectedOption && <span className="text-purple-400"> ({item.selectedOption})</span>} × {item.quantity}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ))
+            }
           </div>
         )}
 
