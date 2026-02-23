@@ -64,7 +64,9 @@ export default function App() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => {
         loadOrders();
       })
-      .subscribe();
+      .subscribe((status) => {
+        if (status === 'CHANNEL_ERROR') console.error('Realtime subscription failed');
+      });
 
     const { data: { subscription: authSubscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       const user = session?.user ?? null;
@@ -170,14 +172,17 @@ export default function App() {
   };
 
   const loadUserProfile = async (userId) => {
-    const { data } = await supabase.from('profiles').select('*').eq('id', userId).single();
-    if (data) {
-      setUserProfile(data);
-      setProfileName(data.name || '');
-      setProfilePhone(data.phone || '');
-      if (data.name) setCustomerName(data.name);
-      if (data.phone) setCustomerPhone(data.phone);
-    }
+    try {
+      const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).single();
+      if (error && error.code !== 'PGRST116') console.error('Error loading profile:', error);
+      if (data) {
+        setUserProfile(data);
+        setProfileName(data.name || '');
+        setProfilePhone(data.phone || '');
+        if (data.name) setCustomerName(data.name);
+        if (data.phone) setCustomerPhone(data.phone);
+      }
+    } catch (e) { console.error('loadUserProfile failed:', e); }
   };
 
   const saveUserProfile = async () => {
