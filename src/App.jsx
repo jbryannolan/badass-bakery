@@ -223,12 +223,20 @@ export default function App() {
 
   const handleSetPassword = async () => {
     if (newPassword.length < 6) { setNewPasswordMessage('Error: Password must be at least 6 characters.'); return; }
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) { setNewPasswordMessage('Error: Session expired - please sign out and sign in again.'); return; }
     setNewPasswordSaving(true);
     setNewPasswordMessage('');
-    const { error } = await supabase.auth.updateUser({ password: newPassword });
-    setNewPasswordSaving(false);
-    if (error) setNewPasswordMessage('Error: ' + error.message);
-    else { setNewPasswordMessage('Password set! You can now sign in with email + password.'); setNewPassword(''); }
+    try {
+      const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('Timed out - please try again.')), 8000));
+      const { error } = await Promise.race([supabase.auth.updateUser({ password: newPassword }), timeout]);
+      if (error) setNewPasswordMessage('Error: ' + error.message);
+      else { setNewPasswordMessage('Password set! You can now sign in with email + password.'); setNewPassword(''); }
+    } catch (e) {
+      setNewPasswordMessage('Error: ' + e.message);
+    } finally {
+      setNewPasswordSaving(false);
+    }
   };
 
   const saveAdminEmail = async () => {
