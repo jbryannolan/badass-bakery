@@ -34,6 +34,11 @@ export default function App() {
   const [adminEmail, setAdminEmail] = useState('');
   const [tempAdminEmail, setTempAdminEmail] = useState('');
   const [adminEmailSaved, setAdminEmailSaved] = useState(false);
+  const [isOpen, setIsOpen] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [loginError, setLoginError] = useState(false);
+  const [lastOrder, setLastOrder] = useState(null);
+  const [customerPhone, setCustomerPhone] = useState('');
   const [error, setError] = useState(null);
 
   useEffect(() => {
@@ -55,7 +60,7 @@ export default function App() {
     setLoading(true);
     setError(null);
     try {
-      await Promise.all([loadItems(), loadOrders(), loadBlockedDates(), loadAdminEmail()]);
+      await Promise.all([loadItems(), loadOrders(), loadBlockedDates(), loadAdminEmail(), loadIsOpen()]);
     } catch (err) {
       console.error('Error loading data:', err);
       setError('Failed to load data. Please refresh the page.');
@@ -78,9 +83,11 @@ export default function App() {
       .from('orders')
       .select('*')
       .order('created_at', { ascending: false });
-    
+
     if (error) throw error;
-    setOrders(data || []);
+    const freshOrders = data || [];
+    setOrders(freshOrders);
+    return freshOrders;
   };
 
   const loadBlockedDates = async () => {
@@ -114,6 +121,18 @@ export default function App() {
       setAdminEmail(data.value);
       setTempAdminEmail(data.value);
     }
+  };
+
+  const loadIsOpen = async () => {
+    const { data, error } = await supabase.from('settings').select('*').eq('key', 'is_open').single();
+    if (error && error.code !== 'PGRST116') console.error('Error loading is_open:', error);
+    setIsOpen(data?.value !== false);
+  };
+
+  const saveIsOpen = async (value) => {
+    const { error } = await supabase.from('settings').upsert({ key: 'is_open', value }, { onConflict: 'key' });
+    if (error) { console.error('Error saving is_open:', error); return; }
+    setIsOpen(value);
   };
 
   const saveAdminEmail = async () => {
@@ -157,30 +176,22 @@ export default function App() {
 
   const addToCart = (item, selectedOption = null, quantity = 1) => {
     const cartKey = `${item.id}-${selectedOption || 'default'}`;
-    const existing = cart.find(c => c.cartKey === cartKey);
-    
-    if (existing) {
-      setCart(cart.map(c => c.cartKey === cartKey ? { ...c, quantity: c.quantity + quantity } : c));
-    } else {
-      setCart([...cart, { 
-        ...item, 
-        cartKey,
-        selectedOption, 
-        quantity 
-      }]);
-    }
+    setCart(prev => {
+      const existing = prev.find(c => c.cartKey === cartKey);
+      if (existing) return prev.map(c => c.cartKey === cartKey ? { ...c, quantity: c.quantity + quantity } : c);
+      return [...prev, { ...item, cartKey, selectedOption, quantity }];
+    });
   };
 
   const updateCartQuantity = (cartKey, newQuantity) => {
-    if (newQuantity <= 0) {
-      setCart(cart.filter(c => c.cartKey !== cartKey));
-    } else {
-      setCart(cart.map(c => c.cartKey === cartKey ? { ...c, quantity: newQuantity } : c));
-    }
+    setCart(prev => {
+      if (newQuantity <= 0) return prev.filter(c => c.cartKey !== cartKey);
+      return prev.map(c => c.cartKey === cartKey ? { ...c, quantity: newQuantity } : c);
+    });
   };
 
   const removeFromCart = (cartKey) => {
-    setCart(cart.filter(c => c.cartKey !== cartKey));
+    setCart(prev => prev.filter(c => c.cartKey !== cartKey));
   };
 
   const getCartTotal = () => {
@@ -191,8 +202,10 @@ export default function App() {
   };
 
   const submitOrder = async () => {
-    if (!customerName.trim() || !customerEmail.trim() || cart.length === 0) return;
-    
+    if (!customerName.trim() || !customerEmail.trim() || cart.length === 0 || !requestedDate) return;
+    if (submitting) return;
+    setSubmitting(true);
+
     const orderItems = cart.map(item => ({
       id: item.id,
       name: item.name,
@@ -205,7 +218,8 @@ export default function App() {
     const orderData = {
       customer_name: customerName.trim(),
       customer_email: customerEmail.trim(),
-      requested_date: requestedDate || null,
+      customer_phone: customerPhone.trim() || null,
+      requested_date: requestedDate,
       fulfillment_type: fulfillmentType,
       delivery_address: fulfillmentType === 'delivery' ? deliveryAddress.trim() : null,
       items: orderItems,
@@ -223,19 +237,23 @@ export default function App() {
     if (error) {
       console.error('Error submitting order:', error);
       setError('Failed to submit order. Please try again.');
+      setSubmitting(false);
       return;
     }
 
     // Send confirmation emails (don't block on this)
     sendOrderEmails({ ...orderData, admin_email: adminEmail }).catch(err => console.error('Email error:', err));
 
+    setLastOrder({ ...orderData, items: orderItems });
     setCart([]);
     setCustomerName('');
     setCustomerEmail('');
+    setCustomerPhone('');
     setRequestedDate('');
     setFulfillmentType('pickup');
     setDeliveryAddress('');
     setOrderNote('');
+    setSubmitting(false);
     setView('confirmation');
   };
 
@@ -243,7 +261,10 @@ export default function App() {
     if (passwordInput.toLowerCase() === ADMIN_PASSWORD) {
       setIsAdmin(true);
       setPasswordInput('');
+      setLoginError(false);
       setView('admin');
+    } else {
+      setLoginError(true);
     }
   };
 
@@ -258,7 +279,7 @@ export default function App() {
       console.error('Error updating item:', error);
       return;
     }
-    await loadItems();
+    setItems(prev => prev.map(i => i.id === itemId ? { ...i, in_stock: !i.in_stock } : i));
   };
 
   const updateItemPrice = async (itemId) => {
@@ -273,7 +294,7 @@ export default function App() {
     }
     setEditingPrice(null);
     setTempPrice('');
-    await loadItems();
+    setItems(prev => prev.map(i => i.id === itemId ? { ...i, price: parseFloat(tempPrice) || 0 } : i));
   };
 
   const updateItemOptions = async (itemId) => {
@@ -289,7 +310,7 @@ export default function App() {
     }
     setEditingOptions(null);
     setTempOptions('');
-    await loadItems();
+    setItems(prev => prev.map(i => i.id === itemId ? { ...i, options: optionsArray.length > 0 ? optionsArray : null } : i));
   };
 
   const updateItemDescription = async (itemId) => {
@@ -304,15 +325,15 @@ export default function App() {
     }
     setEditingDescription(null);
     setTempDescription('');
-    await loadItems();
+    setItems(prev => prev.map(i => i.id === itemId ? { ...i, description: tempDescription.trim() || null } : i));
   };
 
   const addItem = async () => {
     if (!newItem.name.trim()) return;
-    
+
     const optionsArray = newItem.options.split(',').map(o => o.trim()).filter(o => o);
-    
-    const { error } = await supabase
+
+    const { data, error } = await supabase
       .from('items')
       .insert({
         name: newItem.name.trim(),
@@ -321,18 +342,20 @@ export default function App() {
         price: parseFloat(newItem.price) || 0,
         options: optionsArray.length > 0 ? optionsArray : null,
         in_stock: true
-      });
+      })
+      .select();
 
     if (error) {
       console.error('Error adding item:', error);
       return;
     }
-    
+
     setNewItem({ name: '', description: '', emoji: '🍪', price: '', options: '' });
-    await loadItems();
+    if (data?.[0]) setItems(prev => [...prev, data[0]]);
   };
 
   const deleteItem = async (itemId) => {
+    if (!window.confirm('Delete this item? This cannot be undone.')) return;
     const { error } = await supabase
       .from('items')
       .delete()
@@ -342,7 +365,7 @@ export default function App() {
       console.error('Error deleting item:', error);
       return;
     }
-    await loadItems();
+    setItems(prev => prev.filter(i => i.id !== itemId));
   };
 
   const toggleOrderFulfilled = async (orderId) => {
@@ -356,7 +379,10 @@ export default function App() {
       console.error('Error updating order:', error);
       return;
     }
-    await loadOrders();
+    const fresh = await loadOrders();
+    if (selectedOrder?.id === orderId) {
+      setSelectedOrder(fresh.find(o => o.id === orderId) || null);
+    }
   };
 
   const toggleOrderPaid = async (orderId) => {
@@ -370,10 +396,14 @@ export default function App() {
       console.error('Error updating order:', error);
       return;
     }
-    await loadOrders();
+    const fresh = await loadOrders();
+    if (selectedOrder?.id === orderId) {
+      setSelectedOrder(fresh.find(o => o.id === orderId) || null);
+    }
   };
 
   const deleteOrder = async (orderId) => {
+    if (!window.confirm('Delete this order? This cannot be undone.')) return;
     const { error } = await supabase
       .from('orders')
       .delete()
@@ -393,7 +423,7 @@ export default function App() {
   const getTomorrowDate = () => {
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
-    return tomorrow.toISOString().split('T')[0];
+    return `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, '0')}-${String(tomorrow.getDate()).padStart(2, '0')}`;
   };
 
   const formatFulfillmentType = (type) => {
@@ -430,7 +460,7 @@ export default function App() {
   };
 
   const formatDateString = (date) => {
-    return date.toISOString().split('T')[0];
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
   };
 
   const isPastDate = (date) => {
@@ -552,27 +582,37 @@ export default function App() {
               Welcome, friend! Check out what's baking. 🔥
             </p>
             
-            <div className="space-y-3 mb-6">
-              {items.filter(i => i.in_stock).map(item => (
-                <MenuItem 
-                  key={item.id} 
-                  item={item} 
-                  onAddToCart={addToCart}
-                  formatPrice={formatPrice}
-                />
-              ))}
-              {items.filter(i => i.in_stock).length === 0 && (
-                <p className="text-center text-gray-500 py-8">Nothing available right now - check back soon!</p>
-              )}
-            </div>
+            {!isOpen ? (
+              <div className="text-center py-12">
+                <div className="text-5xl mb-4">🔒</div>
+                <h2 className="text-xl font-bold text-white mb-2">We're Closed</h2>
+                <p className="text-gray-400">We're not taking orders right now. Check back soon!</p>
+              </div>
+            ) : (
+              <>
+                <div className="space-y-3 mb-6">
+                  {items.filter(i => i.in_stock).map(item => (
+                    <MenuItem
+                      key={item.id}
+                      item={item}
+                      onAddToCart={addToCart}
+                      formatPrice={formatPrice}
+                    />
+                  ))}
+                  {items.filter(i => i.in_stock).length === 0 && (
+                    <p className="text-center text-gray-500 py-8">Nothing available right now - check back soon!</p>
+                  )}
+                </div>
 
-            {cart.length > 0 && (
-              <button
-                onClick={() => setView('cart')}
-                className="w-full bg-purple-600 hover:bg-purple-500 text-white py-3 rounded-lg font-bold transition-colors"
-              >
-                View Cart ({cart.reduce((sum, item) => sum + item.quantity, 0)} items) — {formatPrice(getCartTotal())}
-              </button>
+                {cart.length > 0 && (
+                  <button
+                    onClick={() => setView('cart')}
+                    className="w-full bg-purple-600 hover:bg-purple-500 text-white py-3 rounded-lg font-bold transition-colors"
+                  >
+                    View Cart ({cart.reduce((sum, item) => sum + item.quantity, 0)} items) — {formatPrice(getCartTotal())}
+                  </button>
+                )}
+              </>
             )}
           </div>
         )}
@@ -602,14 +642,14 @@ export default function App() {
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => updateCartQuantity(item.cartKey, item.quantity - 1)}
-                        className="w-8 h-8 bg-gray-700 hover:bg-gray-600 rounded text-white"
+                        className="w-11 h-11 bg-gray-700 hover:bg-gray-600 rounded text-white"
                       >
                         -
                       </button>
                       <span className="w-8 text-center">{item.quantity}</span>
                       <button
                         onClick={() => updateCartQuantity(item.cartKey, item.quantity + 1)}
-                        className="w-8 h-8 bg-gray-700 hover:bg-gray-600 rounded text-white"
+                        className="w-11 h-11 bg-gray-700 hover:bg-gray-600 rounded text-white"
                       >
                         +
                       </button>
@@ -650,9 +690,17 @@ export default function App() {
                 onChange={(e) => setCustomerEmail(e.target.value)}
                 className="w-full bg-gray-700 border border-gray-600 rounded p-2 mb-3 text-white placeholder-gray-400 focus:border-purple-500 focus:outline-none"
               />
-              
+
+              <input
+                type="tel"
+                placeholder="Phone number (optional)"
+                value={customerPhone}
+                onChange={(e) => setCustomerPhone(e.target.value)}
+                className="w-full bg-gray-700 border border-gray-600 rounded p-2 mb-3 text-white placeholder-gray-400 focus:border-purple-500 focus:outline-none"
+              />
+
               <div className="mb-3">
-                <label className="text-gray-400 text-sm mb-1 block">Requested date</label>
+                <label className="text-gray-400 text-sm mb-1 block">Requested date <span className="text-red-400">*</span></label>
                 <input
                   type="date"
                   value={requestedDate}
@@ -726,10 +774,10 @@ export default function App() {
               
               <button
                 onClick={submitOrder}
-                disabled={!customerName.trim() || !customerEmail.trim() || cart.length === 0}
+                disabled={!customerName.trim() || !customerEmail.trim() || cart.length === 0 || !requestedDate || submitting}
                 className="w-full bg-purple-600 hover:bg-purple-500 disabled:bg-gray-600 disabled:text-gray-400 text-white py-3 rounded-lg font-bold transition-colors"
               >
-                Place Order — {formatPrice(getCartTotal())}
+                {submitting ? 'Placing Order...' : `Place Order — ${formatPrice(getCartTotal())}`}
               </button>
             </div>
           </div>
@@ -742,6 +790,23 @@ export default function App() {
               <div className="text-5xl mb-4">🎉</div>
               <h2 className="text-2xl font-bold text-white mb-2">Hell Yeah!</h2>
               <p className="text-purple-300 mb-6">Your order is in. Theresa will hit you up soon.</p>
+              {lastOrder && (
+                <div className="text-left bg-gray-900 rounded-lg p-4 mb-6 text-sm">
+                  <p className="text-gray-400 mb-2"><span className="text-white font-medium">Name:</span> {lastOrder.customer_name}</p>
+                  <p className="text-gray-400 mb-2">
+                    <span className="text-white font-medium">Date:</span>{' '}
+                    {lastOrder.requested_date
+                      ? new Date(lastOrder.requested_date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
+                      : 'Not specified'}
+                  </p>
+                  <ul className="mb-2 text-gray-300">
+                    {lastOrder.items.map((item, idx) => (
+                      <li key={idx}>{item.emoji} {item.name}{item.selectedOption && <span className="text-purple-400"> ({item.selectedOption})</span>} × {item.quantity}</li>
+                    ))}
+                  </ul>
+                  <p className="text-white font-medium">Total: {formatPrice(lastOrder.total)}</p>
+                </div>
+              )}
               <button
                 onClick={() => setView('menu')}
                 className="bg-purple-600 hover:bg-purple-500 text-white px-6 py-2 rounded-lg font-medium"
@@ -761,12 +826,13 @@ export default function App() {
                 type="password"
                 placeholder="Password"
                 value={passwordInput}
-                onChange={(e) => setPasswordInput(e.target.value)}
+                onChange={(e) => { setPasswordInput(e.target.value); setLoginError(false); }}
                 onKeyDown={(e) => e.key === 'Enter' && handleAdminLogin()}
                 autoComplete="off"
                 data-1p-ignore
                 className="w-full bg-gray-700 border border-gray-600 rounded p-2 mb-3 text-white placeholder-gray-400 focus:border-purple-500 focus:outline-none"
               />
+              {loginError && <p className="text-red-400 text-sm mb-3">Incorrect password.</p>}
               <button
                 onClick={handleAdminLogin}
                 className="w-full bg-purple-600 hover:bg-purple-500 text-white py-2 rounded-lg font-medium"
@@ -786,32 +852,7 @@ export default function App() {
         {/* Admin View */}
         {view === 'admin' && isAdmin && (
           <div>
-            <div className="flex gap-2 mb-6">
-              <button
-                onClick={() => setView('admin')}
-                className="flex-1 bg-purple-600 text-white py-2 rounded-lg font-medium text-sm"
-              >
-                Items
-              </button>
-              <button
-                onClick={() => setView('orders')}
-                className="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-2 rounded-lg font-medium text-sm"
-              >
-                Orders ({orders.filter(o => !o.is_fulfilled || !o.is_paid).length})
-              </button>
-              <button
-                onClick={() => setView('availability')}
-                className="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-2 rounded-lg font-medium text-sm"
-              >
-                Availability
-              </button>
-              <button
-                onClick={() => setView('settings')}
-                className="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-2 rounded-lg font-medium text-sm"
-              >
-                Settings
-              </button>
-            </div>
+            <AdminNav activeView={view} onNavigate={setView} orders={orders} />
 
             {/* Add New Item */}
             <div className="bg-gray-800 rounded-lg p-4 shadow-lg border border-gray-700 mb-4">
@@ -1019,32 +1060,7 @@ export default function App() {
         {/* Availability Calendar View */}
         {view === 'availability' && isAdmin && (
           <div>
-            <div className="flex gap-2 mb-6">
-              <button
-                onClick={() => setView('admin')}
-                className="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-2 rounded-lg font-medium text-sm"
-              >
-                Items
-              </button>
-              <button
-                onClick={() => setView('orders')}
-                className="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-2 rounded-lg font-medium text-sm"
-              >
-                Orders ({orders.filter(o => !o.is_fulfilled || !o.is_paid).length})
-              </button>
-              <button
-                onClick={() => setView('availability')}
-                className="flex-1 bg-purple-600 text-white py-2 rounded-lg font-medium text-sm"
-              >
-                Availability
-              </button>
-              <button
-                onClick={() => setView('settings')}
-                className="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-2 rounded-lg font-medium text-sm"
-              >
-                Settings
-              </button>
-            </div>
+            <AdminNav activeView={view} onNavigate={setView} orders={orders} />
 
             <div className="bg-gray-800 rounded-lg p-4 shadow-lg border border-gray-700">
               <div className="flex justify-between items-center mb-4">
@@ -1124,32 +1140,7 @@ export default function App() {
         {/* Settings View */}
         {view === 'settings' && isAdmin && (
           <div>
-            <div className="flex gap-2 mb-6">
-              <button
-                onClick={() => setView('admin')}
-                className="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-2 rounded-lg font-medium text-sm"
-              >
-                Items
-              </button>
-              <button
-                onClick={() => setView('orders')}
-                className="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-2 rounded-lg font-medium text-sm"
-              >
-                Orders ({orders.filter(o => !o.is_fulfilled || !o.is_paid).length})
-              </button>
-              <button
-                onClick={() => setView('availability')}
-                className="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-2 rounded-lg font-medium text-sm"
-              >
-                Availability
-              </button>
-              <button
-                onClick={() => setView('settings')}
-                className="flex-1 bg-purple-600 text-white py-2 rounded-lg font-medium text-sm"
-              >
-                Settings
-              </button>
-            </div>
+            <AdminNav activeView={view} onNavigate={setView} orders={orders} />
 
             <div className="bg-gray-800 rounded-lg p-4 shadow-lg border border-gray-700">
               <h3 className="font-bold text-white mb-4">Email Notifications</h3>
@@ -1178,38 +1169,25 @@ export default function App() {
                 </p>
               )}
             </div>
+
+            <div className="bg-gray-800 rounded-lg p-4 shadow-lg border border-gray-700 mt-4">
+              <h3 className="font-bold text-white mb-2">Bakery Status</h3>
+              <p className="text-gray-400 text-sm mb-3">When closed, customers see a "We're closed" message.</p>
+              <button
+                onClick={() => saveIsOpen(!isOpen)}
+                className={`px-4 py-2 rounded-lg font-medium ${isOpen ? 'bg-red-700 hover:bg-red-600 text-white' : 'bg-green-700 hover:bg-green-600 text-white'}`}
+              >
+                {isOpen ? 'Close the Bakery' : 'Open the Bakery'}
+              </button>
+              <p className="text-gray-500 text-xs mt-2">Currently: <span className={isOpen ? 'text-green-400' : 'text-red-400'}>{isOpen ? 'Open' : 'Closed'}</span></p>
+            </div>
           </div>
         )}
 
         {/* Orders View */}
         {view === 'orders' && isAdmin && (
           <div>
-            <div className="flex gap-2 mb-6">
-              <button
-                onClick={() => setView('admin')}
-                className="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-2 rounded-lg font-medium text-sm"
-              >
-                Items
-              </button>
-              <button
-                onClick={() => setView('orders')}
-                className="flex-1 bg-purple-600 text-white py-2 rounded-lg font-medium text-sm"
-              >
-                Orders ({orders.filter(o => !o.is_fulfilled || !o.is_paid).length})
-              </button>
-              <button
-                onClick={() => setView('availability')}
-                className="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-2 rounded-lg font-medium text-sm"
-              >
-                Availability
-              </button>
-              <button
-                onClick={() => setView('settings')}
-                className="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-2 rounded-lg font-medium text-sm"
-              >
-                Settings
-              </button>
-            </div>
+            <AdminNav activeView={view} onNavigate={setView} orders={orders} />
 
             {/* View Mode Tabs */}
             <div className="flex gap-2 mb-4">
@@ -1463,6 +1441,7 @@ function OrderCard({ order, formatPrice, formatFulfillmentType, getOrderStatusCo
       {/* Order Details */}
       <div className="text-sm text-gray-400 mb-2 space-y-1">
         <div>📧 {order.customer_email}</div>
+        {order.customer_phone && <div>📞 {order.customer_phone}</div>}
         {order.requested_date && (
           <div>📅 Requested: {new Date(order.requested_date).toLocaleDateString()}</div>
         )}
@@ -1523,6 +1502,31 @@ function OrderCard({ order, formatPrice, formatFulfillmentType, getOrderStatusCo
   );
 }
 
+// Admin Navigation Component
+function AdminNav({ activeView, onNavigate, orders }) {
+  const tabs = [
+    { view: 'admin', label: 'Items' },
+    { view: 'orders', label: `Orders (${orders.filter(o => !o.is_fulfilled || !o.is_paid).length})` },
+    { view: 'availability', label: 'Availability' },
+    { view: 'settings', label: 'Settings' },
+  ];
+  return (
+    <div className="flex gap-2 mb-6">
+      {tabs.map(tab => (
+        <button
+          key={tab.view}
+          onClick={() => onNavigate(tab.view)}
+          className={`flex-1 py-2 rounded-lg font-medium text-sm ${
+            activeView === tab.view ? 'bg-purple-600 text-white' : 'bg-gray-700 hover:bg-gray-600 text-white'
+          }`}
+        >
+          {tab.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 // Menu Item Component
 function MenuItem({ item, onAddToCart, formatPrice }) {
   const [selectedOption, setSelectedOption] = useState(item.options?.[0] || null);
@@ -1563,14 +1567,14 @@ function MenuItem({ item, onAddToCart, formatPrice }) {
           <div className="flex items-center bg-gray-700 rounded">
             <button
               onClick={() => setQuantity(Math.max(1, quantity - 1))}
-              className="w-8 h-8 text-white hover:bg-gray-600 rounded-l"
+              className="w-11 h-11 text-white hover:bg-gray-600 rounded-l"
             >
               -
             </button>
             <span className="w-8 text-center text-white">{quantity}</span>
             <button
               onClick={() => setQuantity(quantity + 1)}
-              className="w-8 h-8 text-white hover:bg-gray-600 rounded-r"
+              className="w-11 h-11 text-white hover:bg-gray-600 rounded-r"
             >
               +
             </button>

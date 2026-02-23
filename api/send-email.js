@@ -53,6 +53,7 @@ export default async function handler(req, res) {
             </h2>
             
             ${forTheresa ? `<p><strong>Customer Email:</strong> ${order.customer_email}</p>` : ''}
+            ${forTheresa && order.customer_phone ? `<p><strong>Phone:</strong> ${order.customer_phone}</p>` : ''}
             
             <p><strong>Requested Date:</strong> ${requestedDate}</p>
             <p><strong>Fulfillment:</strong> ${fulfillmentText}</p>
