@@ -66,6 +66,7 @@ export default function App() {
         setCustomerEmail(user.email);
         await loadUserProfile(user.id);
         await loadMyOrders(user.email);
+        if (event === 'SIGNED_IN') setView('menu');
       }
     });
 
@@ -201,14 +202,16 @@ export default function App() {
     setAuthLoading(true);
     setAuthMessage('');
     if (authMode === 'signup') {
-      const { error } = await supabase.auth.signUp({ email: authEmail, password: authPassword, options: { emailRedirectTo: window.location.origin } });
+      const { data, error } = await supabase.auth.signUp({ email: authEmail, password: authPassword });
       setAuthLoading(false);
       if (error) setAuthMessage('Error: ' + error.message);
-      else setAuthMessage('Account created! Check your email to confirm, then sign in.');
+      else if (data?.user && !data.session) setAuthMessage('Account created! Check your email to confirm, then sign in.');
+      // If session exists, onAuthStateChange will redirect to menu
     } else {
       const { error } = await supabase.auth.signInWithPassword({ email: authEmail, password: authPassword });
       setAuthLoading(false);
       if (error) setAuthMessage('Error: ' + error.message);
+      // onAuthStateChange will redirect to menu on success
     }
   };
 
