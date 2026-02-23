@@ -2,11 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from './supabase';
 import { sendOrderEmails } from './email';
 
-const ADMIN_PASSWORD = 'theresa';
 
 export default function App() {
   const [view, setView] = useState('menu');
   const [isAdmin, setIsAdmin] = useState(false);
+  const [adminEmails, setAdminEmails] = useState([]);
   const [items, setItems] = useState([]);
   const [orders, setOrders] = useState([]);
   const [blockedDates, setBlockedDates] = useState([]);
@@ -18,7 +18,6 @@ export default function App() {
   const [fulfillmentType, setFulfillmentType] = useState('pickup');
   const [deliveryAddress, setDeliveryAddress] = useState('');
   const [orderNote, setOrderNote] = useState('');
-  const [passwordInput, setPasswordInput] = useState('');
   const [newItem, setNewItem] = useState({ name: '', description: '', emoji: '🍪', price: '', options: '' });
   const [editingPrice, setEditingPrice] = useState(null);
   const [editingOptions, setEditingOptions] = useState(null);
@@ -36,7 +35,6 @@ export default function App() {
   const [adminEmailSaved, setAdminEmailSaved] = useState(false);
   const [isOpen, setIsOpen] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [loginError, setLoginError] = useState(false);
   const [lastOrder, setLastOrder] = useState(null);
   const [customerPhone, setCustomerPhone] = useState('');
   const [error, setError] = useState(null);
@@ -83,7 +81,7 @@ export default function App() {
         setTimeout(() => reject(new Error('Request timed out')), 10000)
       );
       await Promise.race([
-        Promise.all([loadItems(), loadOrders(), loadBlockedDates(), loadAdminEmail(), loadIsOpen()]),
+        Promise.all([loadItems(), loadOrders(), loadBlockedDates(), loadAdminEmail(), loadIsOpen(), loadAdminEmails()]),
         timeout
       ]);
     } catch (err) {
@@ -155,6 +153,14 @@ export default function App() {
     if (error && error.code !== 'PGRST116') console.error('Error loading is_open:', error);
     setIsOpen(data?.value !== false);
   };
+
+  const loadAdminEmails = async () => {
+    const { data, error } = await supabase.from('settings').select('*').eq('key', 'admin_emails').single();
+    if (error && error.code !== 'PGRST116') console.error('Error loading admin emails:', error);
+    if (data?.value) setAdminEmails(data.value);
+  };
+
+  const isUserAdmin = (email) => adminEmails.includes(email?.toLowerCase());
 
   const saveIsOpen = async (value) => {
     const { error } = await supabase.from('settings').upsert({ key: 'is_open', value }, { onConflict: 'key' });
@@ -373,16 +379,6 @@ export default function App() {
     setView('confirmation');
   };
 
-  const handleAdminLogin = () => {
-    if (passwordInput.toLowerCase() === ADMIN_PASSWORD) {
-      setIsAdmin(true);
-      setPasswordInput('');
-      setLoginError(false);
-      setView('admin');
-    } else {
-      setLoginError(true);
-    }
-  };
 
   const toggleItemStock = async (itemId) => {
     const item = items.find(i => i.id === itemId);
@@ -680,9 +676,9 @@ export default function App() {
                   </div>
                 : <button onClick={() => setView('customer-login')} className="text-purple-400 text-sm hover:text-purple-300">Sign in</button>
             )}
-            {!isAdmin && (
+            {!isAdmin && currentUser && isUserAdmin(currentUser.email) && (
               <button
-                onClick={() => setView('login')}
+                onClick={() => { setIsAdmin(true); setView('admin'); }}
                 className="text-sm bg-purple-700 hover:bg-purple-600 px-3 py-1 rounded"
               >
                 Admin
@@ -1081,38 +1077,6 @@ export default function App() {
                   </div>
                 ))
             }
-          </div>
-        )}
-
-        {/* Admin Login */}
-        {view === 'login' && !isAdmin && (
-          <div className="max-w-sm mx-auto">
-            <div className="bg-gray-800 rounded-lg p-6 shadow-lg border border-gray-700">
-              <h2 className="text-xl font-bold text-white mb-4">Admin Login</h2>
-              <input
-                type="password"
-                placeholder="Password"
-                value={passwordInput}
-                onChange={(e) => { setPasswordInput(e.target.value); setLoginError(false); }}
-                onKeyDown={(e) => e.key === 'Enter' && handleAdminLogin()}
-                autoComplete="off"
-                data-1p-ignore
-                className="w-full bg-gray-700 border border-gray-600 rounded p-2 mb-3 text-white placeholder-gray-400 focus:border-purple-500 focus:outline-none"
-              />
-              {loginError && <p className="text-red-400 text-sm mb-3">Incorrect password.</p>}
-              <button
-                onClick={handleAdminLogin}
-                className="w-full bg-purple-600 hover:bg-purple-500 text-white py-2 rounded-lg font-medium"
-              >
-                Login
-              </button>
-              <button
-                onClick={() => setView('menu')}
-                className="w-full text-purple-400 hover:text-purple-300 py-2 mt-2"
-              >
-                Cancel
-              </button>
-            </div>
           </div>
         )}
 
