@@ -43,7 +43,7 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState(null);
   const [userProfile, setUserProfile] = useState(null);
   const [authEmail, setAuthEmail] = useState('');
-  const [authMode, setAuthMode] = useState('password'); // 'password' | 'magic'
+  const [authMode, setAuthMode] = useState('signin'); // 'signin' | 'signup'
   const [authPassword, setAuthPassword] = useState('');
   const [authLoading, setAuthLoading] = useState(false);
   const [authMessage, setAuthMessage] = useState('');
@@ -195,20 +195,21 @@ export default function App() {
     setMyOrders(data || []);
   };
 
-  const handleMagicLink = async () => {
+  const handleAuth = async () => {
+    if (!authEmail.trim() || !authPassword) return;
+    if (authPassword.length < 6) { setAuthMessage('Error: Password must be at least 6 characters.'); return; }
     setAuthLoading(true);
     setAuthMessage('');
-    const { error } = await supabase.auth.signInWithOtp({ email: authEmail, options: { emailRedirectTo: window.location.origin } });
-    setAuthLoading(false);
-    setAuthMessage(error ? 'Error: ' + error.message : 'Check your email for a sign-in link!');
-  };
-
-  const handlePasswordAuth = async () => {
-    setAuthLoading(true);
-    setAuthMessage('');
-    const { error } = await supabase.auth.signInWithPassword({ email: authEmail, password: authPassword });
-    setAuthLoading(false);
-    if (error) setAuthMessage('Error: ' + error.message);
+    if (authMode === 'signup') {
+      const { error } = await supabase.auth.signUp({ email: authEmail, password: authPassword, options: { emailRedirectTo: window.location.origin } });
+      setAuthLoading(false);
+      if (error) setAuthMessage('Error: ' + error.message);
+      else setAuthMessage('Account created! Check your email to confirm, then sign in.');
+    } else {
+      const { error } = await supabase.auth.signInWithPassword({ email: authEmail, password: authPassword });
+      setAuthLoading(false);
+      if (error) setAuthMessage('Error: ' + error.message);
+    }
   };
 
   const handleSignOut = async () => {
@@ -949,40 +950,34 @@ export default function App() {
         {/* Customer Sign In */}
         {view === 'customer-login' && (
           <div className="max-w-sm mx-auto mt-12 bg-gray-800 rounded-lg p-6 border border-gray-700">
-            <h2 className="text-xl font-bold text-white mb-1">Sign in</h2>
+            <h2 className="text-xl font-bold text-white mb-1">{authMode === 'signup' ? 'Create Account' : 'Sign In'}</h2>
             <p className="text-gray-400 text-sm mb-4">Save your info and see order history.</p>
 
-            <div className="flex gap-2 mb-4">
-              {[{id:'password',label:'Password'},{id:'magic',label:'Email Link'}].map(m => (
-                <button key={m.id} onClick={() => { setAuthMode(m.id); setAuthMessage(''); }}
-                  className={`flex-1 py-1.5 rounded text-sm font-medium ${authMode === m.id ? 'bg-purple-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}>
-                  {m.label}
-                </button>
-              ))}
-            </div>
-
-            <input type="email" placeholder="Email" value={authEmail} onChange={e => setAuthEmail(e.target.value)}
+            <input type="email" placeholder="Email" value={authEmail} onChange={e => { setAuthEmail(e.target.value); setAuthMessage(''); }}
               className="w-full bg-gray-700 border border-gray-600 rounded p-2 mb-3 text-white placeholder-gray-400 focus:border-purple-500 focus:outline-none" />
 
-            {authMode === 'password' && (
-              <input type="password" placeholder="Password" value={authPassword} onChange={e => setAuthPassword(e.target.value)}
-                className="w-full bg-gray-700 border border-gray-600 rounded p-2 mb-3 text-white placeholder-gray-400 focus:border-purple-500 focus:outline-none" />
-            )}
-
-            {authMode === 'magic' && (
-              <p className="text-gray-500 text-xs mb-3">We'll email you a sign-in link. First time? Use this to create your account, then set a password from your profile.</p>
-            )}
+            <input type="password" placeholder={authMode === 'signup' ? 'Create a password (min 6 chars)' : 'Password'}
+              value={authPassword} onChange={e => { setAuthPassword(e.target.value); setAuthMessage(''); }}
+              onKeyDown={e => e.key === 'Enter' && handleAuth()}
+              className="w-full bg-gray-700 border border-gray-600 rounded p-2 mb-3 text-white placeholder-gray-400 focus:border-purple-500 focus:outline-none" />
 
             {authMessage && (
               <p className={`text-sm mb-3 ${authMessage.startsWith('Error') ? 'text-red-400' : 'text-green-400'}`}>{authMessage}</p>
             )}
 
             <button
-              onClick={authMode === 'magic' ? handleMagicLink : handlePasswordAuth}
-              disabled={authLoading || !authEmail.trim()}
+              onClick={handleAuth}
+              disabled={authLoading || !authEmail.trim() || !authPassword}
               className="w-full bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white py-2 rounded-lg font-medium mb-3">
-              {authLoading ? (authMode === 'magic' ? 'Sending...' : 'Signing in...') : authMode === 'magic' ? 'Send Email Link' : 'Sign In'}
+              {authLoading ? (authMode === 'signup' ? 'Creating...' : 'Signing in...') : authMode === 'signup' ? 'Create Account' : 'Sign In'}
             </button>
+
+            <p className="text-center text-gray-500 text-xs mb-2">
+              {authMode === 'signup'
+                ? <>Already have an account? <button onClick={() => { setAuthMode('signin'); setAuthMessage(''); }} className="text-purple-400 hover:underline">Sign in</button></>
+                : <>New here? <button onClick={() => { setAuthMode('signup'); setAuthMessage(''); }} className="text-purple-400 hover:underline">Create an account</button></>
+              }
+            </p>
 
             <button onClick={() => setView('menu')} className="w-full text-gray-500 text-sm mt-2 hover:text-gray-400">
               ← Continue without signing in
@@ -1012,10 +1007,10 @@ export default function App() {
               </button>
             </div>
 
-            {/* Set password */}
+            {/* Change password */}
             <div className="bg-gray-800 rounded-lg p-4 border border-gray-700 mb-6">
-              <h3 className="font-bold text-white mb-1">Password</h3>
-              <p className="text-gray-400 text-xs mb-3">Set a password so you can sign in directly next time - no email link needed.</p>
+              <h3 className="font-bold text-white mb-1">Change Password</h3>
+              <p className="text-gray-400 text-xs mb-3">Update your password.</p>
               <input
                 type="password"
                 placeholder="New password (min 6 chars)"
