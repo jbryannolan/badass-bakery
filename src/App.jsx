@@ -642,7 +642,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-gray-900 overflow-x-hidden">
       {/* Header */}
-      <header className="bg-black/95 backdrop-blur-sm text-white shadow-lg border-b-2 border-purple-600 sticky top-0 z-40" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
+      <header className="bg-black/95 backdrop-blur-sm text-white shadow-lg border-b border-gray-800 sticky top-0 z-40" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
         <div className="max-w-4xl mx-auto flex justify-between items-center px-4 py-3">
           <div 
             className="flex items-center gap-3 cursor-pointer" 
@@ -696,8 +696,11 @@ export default function App() {
         {/* Menu View */}
         {view === 'menu' && (
           <div className="max-w-2xl mx-auto">
-            <p className="text-purple-300 mb-6 text-center text-lg">
-              Welcome, friend! Check out what's baking. 🔥
+            <p className="text-purple-300 mb-2 text-center text-lg">
+              Everything is baked fresh by Theresa in small batches.
+            </p>
+            <p className="text-gray-500 mb-6 text-center text-sm">
+              Pickup in Denver. Pay via Venmo or cash at pickup.
             </p>
             
             {!isOpen ? (
@@ -722,14 +725,7 @@ export default function App() {
                   )}
                 </div>
 
-                {cart.length > 0 && (
-                  <button
-                    onClick={() => setView('cart')}
-                    className="w-full bg-purple-600 hover:bg-purple-500 text-white py-3 rounded-lg font-bold transition-colors"
-                  >
-                    View Cart ({cart.reduce((sum, item) => sum + item.quantity, 0)} items) — {formatPrice(getCartTotal())}
-                  </button>
-                )}
+                {cart.length > 0 && <div className="h-20" />}
               </>
             )}
           </div>
@@ -1157,7 +1153,7 @@ export default function App() {
                             : 'bg-green-900 text-green-300 hover:bg-green-800'
                         }`}
                       >
-                        {item.in_stock ? 'Mark Out' : 'Mark In'}
+                        {item.in_stock ? 'Sold Out' : 'Restock'}
                       </button>
                       <button
                         onClick={() => deleteItem(item.id)}
@@ -1642,6 +1638,21 @@ export default function App() {
         )}
       </main>
 
+      {/* Sticky Cart Bar */}
+      {!isAdmin && cart.length > 0 && view === 'menu' && (
+        <div className="fixed bottom-0 inset-x-0 z-50 bg-gray-900/95 backdrop-blur-md border-t border-gray-700" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+          <div className="max-w-2xl mx-auto px-4 py-3">
+            <button
+              onClick={() => setView('cart')}
+              className="w-full bg-purple-600 hover:bg-purple-500 text-white py-3 rounded-lg font-bold transition-colors flex items-center justify-between px-4"
+            >
+              <span>View Cart ({cart.reduce((sum, item) => sum + item.quantity, 0)})</span>
+              <span>{formatPrice(getCartTotal())}</span>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Footer */}
       <footer className="text-center py-6 text-gray-600 text-sm">
         Made with 💜 for friends
@@ -1764,60 +1775,49 @@ function AdminNav({ activeView, onNavigate, orders }) {
 // Menu Item Component
 function MenuItem({ item, onAddToCart, formatPrice }) {
   const [selectedOption, setSelectedOption] = useState(item.options?.[0] || null);
-  const [quantity, setQuantity] = useState(1);
-  
+  const [added, setAdded] = useState(false);
+
   const handleAddToCart = () => {
-    onAddToCart(item, selectedOption, quantity);
-    setQuantity(1);
+    onAddToCart(item, selectedOption, 1);
+    setAdded(true);
+    setTimeout(() => setAdded(false), 1200);
   };
-  
+
   return (
     <div className="bg-gray-800 rounded-lg p-4 shadow-lg border border-gray-700 hover:border-purple-500 transition-colors">
-      {/* Item info row */}
-      <div className="flex items-start gap-3 mb-3">
+      <div className="flex items-start gap-3">
         <span className="text-3xl flex-shrink-0">{item.emoji}</span>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <h3 className="font-semibold text-white">{item.name}</h3>
+            <h3 className="font-semibold text-white text-lg">{item.name}</h3>
             <span className="text-purple-300 font-medium">{formatPrice(item.price)}</span>
           </div>
-          <p className="text-sm text-gray-400">{item.description}</p>
-        </div>
-      </div>
+          <p className="text-sm text-gray-400 mt-0.5">{item.description}</p>
 
-      {/* Controls row — always full-width, never clips */}
-      <div className="flex items-center gap-2">
-        {item.options && item.options.length > 0 && (
-          <select
-            value={selectedOption || ''}
-            onChange={(e) => setSelectedOption(e.target.value)}
-            className="flex-1 min-w-0 bg-gray-700 border border-gray-600 rounded px-2 py-2 text-white text-sm focus:border-purple-500 focus:outline-none"
-          >
-            {item.options.map(opt => (
-              <option key={opt} value={opt}>{opt}</option>
-            ))}
-          </select>
-        )}
-        <div className="flex items-center bg-gray-700 rounded flex-shrink-0">
-          <button
-            onClick={() => setQuantity(Math.max(1, quantity - 1))}
-            className="w-10 h-10 text-white hover:bg-gray-600 rounded-l text-lg"
-          >
-            -
-          </button>
-          <span className="w-7 text-center text-white text-sm">{quantity}</span>
-          <button
-            onClick={() => setQuantity(quantity + 1)}
-            className="w-10 h-10 text-white hover:bg-gray-600 rounded-r text-lg"
-          >
-            +
-          </button>
+          {item.options && item.options.length > 0 && (
+            <div className="flex items-center gap-2 mt-2">
+              <select
+                value={selectedOption || ''}
+                onChange={(e) => setSelectedOption(e.target.value)}
+                className="flex-1 min-w-0 bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-white text-sm focus:border-purple-500 focus:outline-none"
+              >
+                {item.options.map(opt => (
+                  <option key={opt} value={opt}>{opt}</option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
+
         <button
           onClick={handleAddToCart}
-          className="bg-purple-600 hover:bg-purple-500 text-white px-4 py-2 rounded-lg font-medium transition-colors flex-shrink-0"
+          className={`flex-shrink-0 px-4 py-2 rounded-lg font-medium text-sm transition-all ${
+            added
+              ? 'bg-green-600 text-white scale-105'
+              : 'bg-purple-600 hover:bg-purple-500 text-white'
+          }`}
         >
-          Add
+          {added ? '✓' : 'Add'}
         </button>
       </div>
     </div>

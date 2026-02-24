@@ -2,15 +2,14 @@
 
 ## Quick Wins (Phase 1)
 
-- [ ] **Sticky "View Cart" bottom bar** - shows item count + total on menu page, tap to go to cart (2 hrs)
-- [ ] **Cart feedback animation** - "Add" button briefly flashes "Added ✓" then reverts (1 hr)
-- [ ] **Pickup/ordering info banner** above menu - "Order by Wed, pickup Sat 9am-12pm at [address]" (15 min)
-- [ ] **Payment instructions** visible on menu or cart - "Pay via Venmo or cash at pickup" (15 min)
-- [ ] **Theresa intro line** - replace generic "Welcome, friend!" with something personal (10 min)
-- [ ] **Remove thick purple border** under header - replace with subtle `border-gray-800` (5 min)
-- [ ] **"Mark Out" → "Sold Out" toggle** in admin - use red/gray instead of green (30 min)
-- [ ] **Confirm dialog on admin Delete** - prevent accidental item deletion (20 min)
-- [ ] **Simplify menu cards** for items without options - just "Add" button, no qty stepper on menu. Handle qty in cart (2 hrs)
+- [x] **Sticky "View Cart" bottom bar** - shows item count + total on menu page, tap to go to cart
+- [x] **Cart feedback animation** - "Add" button flashes green "✓" then reverts
+- [x] **Pickup/ordering info banner** above menu + payment instructions
+- [x] **Theresa intro line** - replaced generic welcome with personal + pickup/payment info
+- [x] **Remove thick purple border** under header - replaced with subtle `border-gray-800`
+- [x] **"Sold Out" / "Restock" toggle** in admin - clearer labels
+- [x] **Confirm dialog on admin Delete** - already existed
+- [x] **Simplify menu cards** - removed qty stepper, single "Add" button, qty handled in cart
 
 ## Trust & Content (Theresa can do these)
 
