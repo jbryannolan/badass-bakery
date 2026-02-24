@@ -57,13 +57,13 @@ export default function App() {
   useEffect(() => {
     loadData();
 
-    const { data: { subscription: authSubscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+    const { data: { subscription: authSubscription } } = supabase.auth.onAuthStateChange((event, session) => {
       const user = session?.user ?? null;
       setCurrentUser(user);
       if (user) {
         setCustomerEmail(user.email);
-        await loadUserProfile(user.id);
-        await loadMyOrders(user.email);
+        loadUserProfile(user.id);
+        loadMyOrders(user.email);
         if (event === 'SIGNED_IN') setView('menu');
       }
     });
