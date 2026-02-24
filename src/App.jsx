@@ -540,11 +540,13 @@ export default function App() {
         applicationServerKey: urlBase64ToUint8Array(publicKey),
       });
 
-      // Store subscription in Supabase
-      const { error } = await supabase.from('push_subscriptions').upsert(
-        { user_email: currentUser.email, subscription: sub.toJSON() },
-        { onConflict: 'subscription->>endpoint' }
-      );
+      // Store subscription in Supabase (delete existing for this email first, then insert)
+      const subJson = sub.toJSON();
+      await supabase.from('push_subscriptions').delete().eq('user_email', currentUser.email);
+      const { error } = await supabase.from('push_subscriptions').insert({
+        user_email: currentUser.email,
+        subscription: subJson,
+      });
       if (error) console.error('Error saving push subscription:', error);
 
       setPushEnabled(true);
@@ -560,10 +562,11 @@ export default function App() {
       const reg = await navigator.serviceWorker.ready;
       const sub = await reg.pushManager.getSubscription();
       if (sub) {
-        const endpoint = sub.endpoint;
         await sub.unsubscribe();
-        // Remove from Supabase
-        await supabase.from('push_subscriptions').delete().eq('subscription->>endpoint', endpoint);
+        // Remove from Supabase by email (simple and reliable)
+        if (currentUser) {
+          await supabase.from('push_subscriptions').delete().eq('user_email', currentUser.email);
+        }
       }
       setPushEnabled(false);
     } catch (e) {
@@ -573,13 +576,13 @@ export default function App() {
   };
 
   const sendTestPush = async () => {
-    if (!adminEmail) return;
+    if (!currentUser) return;
     setPushTestSent(false);
     await sendPushNotification({
       title: '🫏 Test Notification',
       body: 'Push notifications are working!',
       url: '/',
-      admin_email: adminEmail,
+      admin_email: currentUser.email,
     });
     setPushTestSent(true);
     setTimeout(() => setPushTestSent(false), 3000);
@@ -786,13 +789,15 @@ export default function App() {
     // Send confirmation emails (don't block on this)
     sendOrderEmails({ ...orderData, admin_email: adminEmail }).catch(err => console.error('Email error:', err));
 
-    // Send push notification to admin (don't block)
-    sendPushNotification({
-      title: '🫏 New Order!',
-      body: `${orderData.customer_name} - ${formatPrice(orderData.total)}`,
-      url: '/',
-      admin_email: adminEmail,
-    }).catch(err => console.error('Push error:', err));
+    // Send push notification to all admins (don't block)
+    for (const email of adminEmails) {
+      sendPushNotification({
+        title: '🫏 New Order!',
+        body: `${orderData.customer_name} - ${formatPrice(orderData.total)}`,
+        url: '/',
+        admin_email: email,
+      }).catch(err => console.error('Push error:', err));
+    }
 
     // Update profile with latest name/phone for logged-in users
     if (currentUser) {
