@@ -73,24 +73,18 @@ export default function App() {
     };
   }, []);
 
-  const loadData = async () => {
+  const loadData = async (retryCount = 0) => {
     setLoading(true);
     setError(null);
     try {
-      const timeout = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Request timed out')), 10000)
-      );
-      await Promise.race([
-        Promise.all([loadItems(), loadOrders(), loadBlockedDates(), loadAdminEmail(), loadIsOpen(), loadAdminEmails()]),
-        timeout
-      ]);
+      await Promise.all([loadItems(), loadOrders(), loadBlockedDates(), loadAdminEmail(), loadIsOpen(), loadAdminEmails()]);
     } catch (err) {
       console.error('Error loading data:', err);
-      if (err.message === 'Request timed out') {
-        setError('Connection timed out. The server may be waking up - please try again in a moment.');
-      } else {
-        setError('Failed to load data: ' + (err.message || 'Unknown error'));
+      if (retryCount < 2) {
+        console.log(`Retrying loadData (attempt ${retryCount + 2})...`);
+        return loadData(retryCount + 1);
       }
+      setError('Failed to load data: ' + (err.message || 'Unknown error'));
     }
     setLoading(false);
   };
