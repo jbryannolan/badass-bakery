@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from './supabase';
 import { sendOrderEmails } from './email';
+import { sendPushNotification, getVapidPublicKey } from './push';
 
 const STATUS_STEPS = ['placed', 'confirmed', 'baking', 'ready', 'complete'];
 const STATUS_CONFIG = {
@@ -360,6 +361,11 @@ export default function App() {
   const [showInstallBanner, setShowInstallBanner] = useState(false);
   const [isIOS, setIsIOS] = useState(false);
 
+  // Push Notifications
+  const [pushEnabled, setPushEnabled] = useState(false);
+  const [pushLoading, setPushLoading] = useState(false);
+  const [pushTestSent, setPushTestSent] = useState(false);
+
   useEffect(() => {
     loadData();
 
@@ -370,6 +376,7 @@ export default function App() {
         setCustomerEmail(user.email);
         loadUserProfile(user.id);
         loadMyOrders(user.email);
+        checkPushStatus();
         if (event === 'SIGNED_IN') setView('menu');
       }
     });
@@ -505,6 +512,88 @@ export default function App() {
     if (error) { console.error('Error saving is_open:', error); return; }
     setIsOpen(value);
   };
+
+  // Push notification functions
+  const checkPushStatus = async () => {
+    try {
+      if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+      if (Notification.permission !== 'granted') { setPushEnabled(false); return; }
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.getSubscription();
+      setPushEnabled(!!sub);
+    } catch (e) { console.error('checkPushStatus error:', e); }
+  };
+
+  const subscribeToPush = async () => {
+    if (!currentUser) return;
+    setPushLoading(true);
+    try {
+      const publicKey = await getVapidPublicKey();
+      if (!publicKey) { setPushLoading(false); return; }
+
+      const permission = await Notification.requestPermission();
+      if (permission !== 'granted') { setPushLoading(false); return; }
+
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(publicKey),
+      });
+
+      // Store subscription in Supabase
+      const { error } = await supabase.from('push_subscriptions').upsert(
+        { user_email: currentUser.email, subscription: sub.toJSON() },
+        { onConflict: 'subscription->>endpoint' }
+      );
+      if (error) console.error('Error saving push subscription:', error);
+
+      setPushEnabled(true);
+    } catch (e) {
+      console.error('subscribeToPush error:', e);
+    }
+    setPushLoading(false);
+  };
+
+  const unsubscribeFromPush = async () => {
+    setPushLoading(true);
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.getSubscription();
+      if (sub) {
+        const endpoint = sub.endpoint;
+        await sub.unsubscribe();
+        // Remove from Supabase
+        await supabase.from('push_subscriptions').delete().eq('subscription->>endpoint', endpoint);
+      }
+      setPushEnabled(false);
+    } catch (e) {
+      console.error('unsubscribeFromPush error:', e);
+    }
+    setPushLoading(false);
+  };
+
+  const sendTestPush = async () => {
+    if (!adminEmail) return;
+    setPushTestSent(false);
+    await sendPushNotification({
+      title: '🫏 Test Notification',
+      body: 'Push notifications are working!',
+      url: '/',
+      admin_email: adminEmail,
+    });
+    setPushTestSent(true);
+    setTimeout(() => setPushTestSent(false), 3000);
+  };
+
+  // Helper: convert VAPID key from base64 to Uint8Array
+  function urlBase64ToUint8Array(base64String) {
+    const padding = '='.repeat((4 - base64String.length % 4) % 4);
+    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+    const raw = atob(base64);
+    const arr = new Uint8Array(raw.length);
+    for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
+    return arr;
+  }
 
   const loadUserProfile = async (userId) => {
     try {
@@ -696,6 +785,14 @@ export default function App() {
 
     // Send confirmation emails (don't block on this)
     sendOrderEmails({ ...orderData, admin_email: adminEmail }).catch(err => console.error('Email error:', err));
+
+    // Send push notification to admin (don't block)
+    sendPushNotification({
+      title: '🫏 New Order!',
+      body: `${orderData.customer_name} - ${formatPrice(orderData.total)}`,
+      url: '/',
+      admin_email: adminEmail,
+    }).catch(err => console.error('Push error:', err));
 
     // Update profile with latest name/phone for logged-in users
     if (currentUser) {
@@ -1806,6 +1903,46 @@ export default function App() {
                 </p>
               )}
             </div>
+
+            {/* Push Notifications */}
+            {'serviceWorker' in navigator && 'PushManager' in window && (
+              <div className="bg-gray-800 rounded-lg p-4 shadow-lg border border-gray-700 mt-4">
+                <h3 className="font-bold text-white mb-2">Push Notifications</h3>
+                <p className="text-gray-400 text-sm mb-3">
+                  Get instant notifications on this device when new orders come in.
+                </p>
+                <div className="flex items-center gap-3 mb-3">
+                  <div className={`w-2 h-2 rounded-full ${pushEnabled ? 'bg-green-400' : 'bg-gray-500'}`} />
+                  <span className="text-sm text-gray-300">{pushEnabled ? 'Active on this device' : 'Not enabled'}</span>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={pushEnabled ? unsubscribeFromPush : subscribeToPush}
+                    disabled={pushLoading}
+                    className={`px-4 py-2 rounded-lg font-medium text-sm ${
+                      pushEnabled
+                        ? 'bg-red-700 hover:bg-red-600 text-white'
+                        : 'bg-purple-600 hover:bg-purple-500 text-white'
+                    } disabled:opacity-50`}
+                  >
+                    {pushLoading ? 'Working...' : pushEnabled ? 'Disable Notifications' : 'Enable Notifications'}
+                  </button>
+                  {pushEnabled && (
+                    <button
+                      onClick={sendTestPush}
+                      className="px-4 py-2 rounded-lg font-medium text-sm bg-gray-700 hover:bg-gray-600 text-gray-300"
+                    >
+                      {pushTestSent ? '✓ Sent!' : 'Send Test'}
+                    </button>
+                  )}
+                </div>
+                {Notification.permission === 'denied' && (
+                  <p className="text-red-400 text-xs mt-2">
+                    Notifications are blocked. Check your browser settings to allow notifications for this site.
+                  </p>
+                )}
+              </div>
+            )}
 
             <div className="bg-gray-800 rounded-lg p-4 shadow-lg border border-gray-700 mt-4">
               <h3 className="font-bold text-white mb-2">Menu Header</h3>

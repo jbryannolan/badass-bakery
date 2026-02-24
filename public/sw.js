@@ -1,5 +1,4 @@
-// Minimal service worker — forces fresh content on every navigation
-// No offline caching. Just cache-busting.
+// Service worker — cache-busting + push notifications
 
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (event) => {
@@ -12,4 +11,47 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   // Let all requests go to the network — no caching
   return;
+});
+
+// Push notification received
+self.addEventListener('push', (event) => {
+  let data = { title: '🫏 Badass Bakery', body: 'You have a new notification', url: '/' };
+
+  try {
+    if (event.data) {
+      data = { ...data, ...event.data.json() };
+    }
+  } catch (e) {
+    console.error('Error parsing push data:', e);
+  }
+
+  event.waitUntil(
+    self.registration.showNotification(data.title, {
+      body: data.body,
+      icon: '/icon-192.png',
+      badge: '/icon-192.png',
+      data: { url: data.url || '/' },
+      vibrate: [200, 100, 200],
+    })
+  );
+});
+
+// Notification clicked — focus or open the app
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+
+  const url = event.notification.data?.url || '/';
+
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
+      // Focus existing window if one is open
+      for (const client of clients) {
+        if (client.url.includes(self.location.origin) && 'focus' in client) {
+          return client.focus();
+        }
+      }
+      // Otherwise open a new window
+      return self.clients.openWindow(url);
+    })
+  );
 });
