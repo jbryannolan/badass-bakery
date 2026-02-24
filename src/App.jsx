@@ -1423,19 +1423,21 @@ export default function App() {
             <div className="bg-gray-800 rounded-lg p-4 shadow-lg border border-gray-700 mt-4">
               <h3 className="font-bold text-white mb-2">Menu Header</h3>
               <p className="text-gray-400 text-sm mb-3">The headline and subtext shown above your menu.</p>
-              <input
-                type="text"
-                placeholder="Headline (e.g. Everything is baked fresh...)"
+              <label className="text-gray-400 text-xs mb-1 block">Headline</label>
+              <textarea
+                rows={2}
+                placeholder="e.g. Everything is baked fresh by Theresa in small batches."
                 value={tempHeadline}
                 onChange={(e) => { setTempHeadline(e.target.value); setMenuTextSaved(false); }}
-                className="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 mb-2 text-white placeholder-gray-400 focus:border-purple-500 focus:outline-none"
+                className="w-full bg-gray-700 border border-gray-600 rounded-lg p-3 mb-3 text-white placeholder-gray-400 focus:border-purple-500 focus:outline-none resize-none"
               />
-              <input
-                type="text"
-                placeholder="Subtext (e.g. Pickup in Denver...)"
+              <label className="text-gray-400 text-xs mb-1 block">Subtext</label>
+              <textarea
+                rows={2}
+                placeholder="e.g. Pickup in Denver. Pay via Venmo or cash at pickup."
                 value={tempSubline}
                 onChange={(e) => { setTempSubline(e.target.value); setMenuTextSaved(false); }}
-                className="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 mb-3 text-white placeholder-gray-400 focus:border-purple-500 focus:outline-none"
+                className="w-full bg-gray-700 border border-gray-600 rounded-lg p-3 mb-3 text-white placeholder-gray-400 focus:border-purple-500 focus:outline-none resize-none"
               />
               <button
                 onClick={saveMenuText}
