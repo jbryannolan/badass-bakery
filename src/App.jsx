@@ -86,9 +86,11 @@ export default function App() {
       ]);
     } catch (err) {
       console.error('Error loading data:', err);
-      setError(err.message === 'Request timed out'
-        ? 'Connection timed out. The server may be waking up - please try again in a moment.'
-        : 'Failed to load data. Please refresh the page.');
+      if (err.message === 'Request timed out') {
+        setError('Connection timed out. The server may be waking up - please try again in a moment.');
+      } else {
+        setError('Failed to load data: ' + (err.message || 'Unknown error'));
+      }
     }
     setLoading(false);
   };
@@ -98,8 +100,8 @@ export default function App() {
       .from('items')
       .select('*')
       .order('created_at', { ascending: true });
-    
-    if (error) throw error;
+
+    if (error) { console.error('loadItems error:', error); throw error; }
     setItems(data || []);
   };
 
@@ -109,7 +111,7 @@ export default function App() {
       .select('*')
       .order('created_at', { ascending: false });
 
-    if (error) throw error;
+    if (error) { console.error('loadOrders error:', error); throw error; }
     const freshOrders = data || [];
     setOrders(freshOrders);
     return freshOrders;
