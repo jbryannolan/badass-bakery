@@ -34,6 +34,11 @@ export default function App() {
   const [tempAdminEmail, setTempAdminEmail] = useState('');
   const [adminEmailSaved, setAdminEmailSaved] = useState(false);
   const [isOpen, setIsOpen] = useState(true);
+  const [menuHeadline, setMenuHeadline] = useState('Everything is baked fresh by Theresa in small batches.');
+  const [menuSubline, setMenuSubline] = useState('Pickup in Denver. Pay via Venmo or cash at pickup.');
+  const [tempHeadline, setTempHeadline] = useState('Everything is baked fresh by Theresa in small batches.');
+  const [tempSubline, setTempSubline] = useState('Pickup in Denver. Pay via Venmo or cash at pickup.');
+  const [menuTextSaved, setMenuTextSaved] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [lastOrder, setLastOrder] = useState(null);
   const [customerPhone, setCustomerPhone] = useState('');
@@ -77,7 +82,7 @@ export default function App() {
     setLoading(true);
     setError(null);
     try {
-      await Promise.all([loadItems(), loadOrders(), loadBlockedDates(), loadAdminEmail(), loadIsOpen(), loadAdminEmails()]);
+      await Promise.all([loadItems(), loadOrders(), loadBlockedDates(), loadAdminEmail(), loadIsOpen(), loadAdminEmails(), loadMenuText()]);
     } catch (err) {
       console.error('Error loading data:', err);
       if (retryCount < 2) {
@@ -157,6 +162,27 @@ export default function App() {
   };
 
   const isUserAdmin = (email) => adminEmails.includes(email?.toLowerCase());
+
+  const loadMenuText = async () => {
+    const { data, error } = await supabase.from('settings').select('*').eq('key', 'menu_text').single();
+    if (error && error.code !== 'PGRST116') console.error('Error loading menu text:', error);
+    if (data?.value) {
+      setMenuHeadline(data.value.headline || '');
+      setMenuSubline(data.value.subline || '');
+      setTempHeadline(data.value.headline || '');
+      setTempSubline(data.value.subline || '');
+    }
+  };
+
+  const saveMenuText = async () => {
+    const value = { headline: tempHeadline.trim(), subline: tempSubline.trim() };
+    const { error } = await supabase.from('settings').upsert({ key: 'menu_text', value }, { onConflict: 'key' });
+    if (error) { console.error('Error saving menu text:', error); return; }
+    setMenuHeadline(value.headline);
+    setMenuSubline(value.subline);
+    setMenuTextSaved(true);
+    setTimeout(() => setMenuTextSaved(false), 2000);
+  };
 
   const saveIsOpen = async (value) => {
     const { error } = await supabase.from('settings').upsert({ key: 'is_open', value }, { onConflict: 'key' });
@@ -696,12 +722,13 @@ export default function App() {
         {/* Menu View */}
         {view === 'menu' && (
           <div className="max-w-2xl mx-auto">
-            <p className="text-purple-300 mb-2 text-center text-lg">
-              Everything is baked fresh by Theresa in small batches.
-            </p>
-            <p className="text-gray-500 mb-6 text-center text-sm">
-              Pickup in Denver. Pay via Venmo or cash at pickup.
-            </p>
+            {menuHeadline && (
+              <p className="text-purple-300 mb-2 text-center text-lg">{menuHeadline}</p>
+            )}
+            {menuSubline && (
+              <p className="text-gray-500 mb-6 text-center text-sm">{menuSubline}</p>
+            )}
+            {!menuHeadline && !menuSubline && <div className="mb-6" />}
             
             {!isOpen ? (
               <div className="text-center py-12">
@@ -1391,6 +1418,31 @@ export default function App() {
                   Currently set to: {adminEmail}
                 </p>
               )}
+            </div>
+
+            <div className="bg-gray-800 rounded-lg p-4 shadow-lg border border-gray-700 mt-4">
+              <h3 className="font-bold text-white mb-2">Menu Header</h3>
+              <p className="text-gray-400 text-sm mb-3">The headline and subtext shown above your menu.</p>
+              <input
+                type="text"
+                placeholder="Headline (e.g. Everything is baked fresh...)"
+                value={tempHeadline}
+                onChange={(e) => { setTempHeadline(e.target.value); setMenuTextSaved(false); }}
+                className="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 mb-2 text-white placeholder-gray-400 focus:border-purple-500 focus:outline-none"
+              />
+              <input
+                type="text"
+                placeholder="Subtext (e.g. Pickup in Denver...)"
+                value={tempSubline}
+                onChange={(e) => { setTempSubline(e.target.value); setMenuTextSaved(false); }}
+                className="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 mb-3 text-white placeholder-gray-400 focus:border-purple-500 focus:outline-none"
+              />
+              <button
+                onClick={saveMenuText}
+                className="bg-purple-600 hover:bg-purple-500 text-white px-4 py-2 rounded-lg font-medium"
+              >
+                {menuTextSaved ? '✓ Saved' : 'Save'}
+              </button>
             </div>
 
             <div className="bg-gray-800 rounded-lg p-4 shadow-lg border border-gray-700 mt-4">
