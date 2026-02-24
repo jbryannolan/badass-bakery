@@ -144,8 +144,9 @@ export default function App() {
     }
     
     if (data?.value) {
-      setAdminEmail(data.value);
-      setTempAdminEmail(data.value);
+      const email = typeof data.value === 'string' ? data.value.replace(/^"|"$/g, '') : data.value;
+      setAdminEmail(email);
+      setTempAdminEmail(email);
     }
   };
 
@@ -275,7 +276,7 @@ export default function App() {
     const email = tempAdminEmail.trim();
     const { error } = await supabase
       .from('settings')
-      .upsert({ key: 'admin_email', value: JSON.stringify(email) });
+      .upsert({ key: 'admin_email', value: email });
     
     if (error) {
       console.error('Error saving admin email:', error);
