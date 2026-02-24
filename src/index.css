@@ -20,7 +20,7 @@
 
 /* Print styles for admin prep view */
 @media print {
-  header, footer, .no-print {
+  header, footer, .no-print, nav.fixed {
     display: none !important;
   }
   body {

@@ -238,29 +238,60 @@ function OrderCard({ order, formatPrice, formatFulfillmentType, getOrderStatusCo
   );
 }
 
-// Admin Navigation Component
-function AdminNav({ activeView, onNavigate, orders }) {
+function AdminBottomNav({ activeView, onNavigate, orders }) {
+  const activeOrderCount = orders.filter(o => normalizeStatus(o) !== 'complete').length;
   const tabs = [
-    { view: 'admin', label: 'Items' },
-    { view: 'orders', label: `Orders (${orders.filter(o => normalizeStatus(o) !== 'complete').length})` },
-    { view: 'prep', label: 'Upcoming' },
-    { view: 'availability', label: 'Dates' },
-    { view: 'settings', label: 'Settings' },
+    {
+      view: 'orders', label: 'Orders', badge: activeOrderCount > 0 ? activeOrderCount : null,
+      icon: (
+        <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25zM6.75 12h.008v.008H6.75V12zm0 3h.008v.008H6.75V15zm0 3h.008v.008H6.75V18z" />
+        </svg>
+      ),
+    },
+    {
+      view: 'admin', label: 'Menu', badge: null,
+      icon: (
+        <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+        </svg>
+      ),
+    },
+    {
+      view: 'settings', label: 'Settings', badge: null,
+      icon: (
+        <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z" />
+          <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+        </svg>
+      ),
+    },
   ];
+
   return (
-    <div className="flex gap-2 mb-6 no-print">
-      {tabs.map(tab => (
-        <button
-          key={tab.view}
-          onClick={() => onNavigate(tab.view)}
-          className={`flex-1 py-2 rounded-lg font-medium text-sm ${
-            activeView === tab.view ? 'bg-purple-600 text-white' : 'bg-gray-700 hover:bg-gray-600 text-white'
-          }`}
-        >
-          {tab.label}
-        </button>
-      ))}
-    </div>
+    <nav className="fixed bottom-0 inset-x-0 z-40 bg-gray-900/95 backdrop-blur-md border-t border-gray-700 no-print" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+      <div className="max-w-4xl mx-auto flex">
+        {tabs.map(tab => (
+          <button
+            key={tab.view}
+            onClick={() => onNavigate(tab.view)}
+            className={`flex-1 flex flex-col items-center gap-0.5 py-2 transition-colors ${
+              activeView === tab.view ? 'text-purple-400' : 'text-gray-500 hover:text-gray-300'
+            }`}
+          >
+            <div className="relative">
+              {tab.icon}
+              {tab.badge && (
+                <span className="absolute -top-1.5 -right-2.5 bg-red-500 text-white text-[11px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
+                  {tab.badge > 99 ? '99+' : tab.badge}
+                </span>
+              )}
+            </div>
+            <span className="text-xs font-medium">{tab.label}</span>
+          </button>
+        ))}
+      </div>
+    </nav>
   );
 }
 
@@ -316,7 +347,7 @@ export default function App() {
   const [tempDescription, setTempDescription] = useState('');
   const [calendarMonth, setCalendarMonth] = useState(new Date());
   const [orderCalendarMonth, setOrderCalendarMonth] = useState(new Date());
-  const [ordersViewMode, setOrdersViewMode] = useState('calendar');
+  const [ordersSubView, setOrdersSubView] = useState('prep');
   const [statusFilter, setStatusFilter] = useState('all');
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [adminEmail, setAdminEmail] = useState('');
@@ -365,6 +396,7 @@ export default function App() {
   const [pushEnabled, setPushEnabled] = useState(false);
   const [pushLoading, setPushLoading] = useState(false);
   const [pushTestSent, setPushTestSent] = useState(false);
+  const [blockedDatesOpen, setBlockedDatesOpen] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -1132,25 +1164,35 @@ export default function App() {
             )}
             {!isAdmin && currentUser && isUserAdmin(currentUser.email) && (
               <button
-                onClick={() => { setIsAdmin(true); setView('admin'); }}
+                onClick={() => { setIsAdmin(true); setView('orders'); }}
                 className="text-sm bg-purple-700 hover:bg-purple-600 px-3 py-1 rounded"
               >
                 Admin
               </button>
             )}
             {isAdmin && (
-              <button
-                onClick={() => { setIsAdmin(false); setView('menu'); }}
-                className="text-sm bg-purple-700 hover:bg-purple-600 px-3 py-1 rounded"
-              >
-                Exit Admin
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => saveIsOpen(!isOpen)}
+                  className="flex items-center gap-1.5 text-sm px-2 py-1 rounded bg-gray-800 hover:bg-gray-700 transition-colors"
+                  title={isOpen ? 'Bakery is open - tap to close' : 'Bakery is closed - tap to open'}
+                >
+                  <span className={`w-2.5 h-2.5 rounded-full ${isOpen ? 'bg-green-400' : 'bg-red-400'}`} />
+                  <span className="text-gray-300 text-xs hidden sm:inline">{isOpen ? 'Open' : 'Closed'}</span>
+                </button>
+                <button
+                  onClick={() => { setIsAdmin(false); setView('menu'); }}
+                  className="text-sm bg-purple-700 hover:bg-purple-600 px-3 py-1 rounded"
+                >
+                  Exit
+                </button>
+              </div>
             )}
           </div>
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto px-4 py-4 pb-8" style={{ paddingBottom: 'max(2rem, env(safe-area-inset-bottom, 0px))' }}>
+      <main className="max-w-4xl mx-auto px-4 py-4 pb-8" style={{ paddingBottom: isAdmin ? 'calc(5rem + env(safe-area-inset-bottom, 0px))' : 'max(2rem, env(safe-area-inset-bottom, 0px))' }}>
         {/* Menu View */}
         {view === 'menu' && (
           <div className="max-w-2xl mx-auto animate-fadeIn">
@@ -1229,35 +1271,42 @@ export default function App() {
               <h2 className="font-bold text-white mb-3 text-xl">🛒 Your Cart</h2>
               <div className="space-y-2 mb-4">
                 {cart.map(item => (
-                  <div key={item.cartKey} className="flex justify-between items-center text-gray-200 py-2 border-b border-gray-700">
-                    <div className="flex-1">
-                      <span className="text-xl">{item.emoji}</span> <span>{item.name}</span>
-                      {item.selectedOption && (
-                        <span className="text-purple-400 text-sm ml-2">({item.selectedOption})</span>
-                      )}
-                      <div className="text-gray-400 text-sm">{formatPrice(item.price)} each</div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => updateCartQuantity(item.cartKey, item.quantity - 1)}
-                        className="w-11 h-11 bg-gray-700 hover:bg-gray-600 rounded text-white"
-                      >
-                        -
-                      </button>
-                      <span className="w-8 text-center">{item.quantity}</span>
-                      <button
-                        onClick={() => updateCartQuantity(item.cartKey, item.quantity + 1)}
-                        className="w-11 h-11 bg-gray-700 hover:bg-gray-600 rounded text-white"
-                      >
-                        +
-                      </button>
-                      <span className="w-20 text-right text-amber-400">{formatPrice(item.price * item.quantity)}</span>
+                  <div key={item.cartKey} className="text-gray-200 py-3 border-b border-gray-700">
+                    <div className="flex justify-between items-start mb-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xl">{item.emoji}</span>
+                          <span className="font-medium">{item.name}</span>
+                          {item.selectedOption && (
+                            <span className="text-purple-400 text-sm">({item.selectedOption})</span>
+                          )}
+                        </div>
+                        <div className="text-gray-400 text-sm ml-7">{formatPrice(item.price)} each</div>
+                      </div>
                       <button
                         onClick={() => removeFromCart(item.cartKey)}
-                        className="ml-2 text-red-400 hover:text-red-300"
+                        className="text-gray-500 hover:text-red-400 p-1 -mr-1"
                       >
                         🗑️
                       </button>
+                    </div>
+                    <div className="flex items-center justify-between ml-7">
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => updateCartQuantity(item.cartKey, item.quantity - 1)}
+                          className="w-9 h-9 bg-gray-700 hover:bg-gray-600 rounded text-white text-sm"
+                        >
+                          -
+                        </button>
+                        <span className="w-6 text-center text-sm">{item.quantity}</span>
+                        <button
+                          onClick={() => updateCartQuantity(item.cartKey, item.quantity + 1)}
+                          className="w-9 h-9 bg-gray-700 hover:bg-gray-600 rounded text-white text-sm"
+                        >
+                          +
+                        </button>
+                      </div>
+                      <span className="text-amber-400 font-medium">{formatPrice(item.price * item.quantity)}</span>
                     </div>
                   </div>
                 ))}
@@ -1591,7 +1640,33 @@ export default function App() {
         {/* Admin View */}
         {view === 'admin' && isAdmin && (
           <div className="animate-fadeIn">
-            <AdminNav activeView={view} onNavigate={(v) => { if (v === 'prep' && !prepDate) setPrepDate(getNextPrepDate()); setView(v); }} orders={orders} />
+            {/* Menu Header */}
+            <div className="bg-gray-800 rounded-lg p-4 shadow-lg border border-gray-700 mb-4">
+              <h3 className="font-bold text-white mb-2">Menu Header</h3>
+              <p className="text-gray-400 text-sm mb-3">The headline and subtext shown above your menu.</p>
+              <label className="text-gray-400 text-xs mb-1 block">Headline</label>
+              <textarea
+                rows={2}
+                placeholder="e.g. Everything is baked fresh by Theresa in small batches."
+                value={tempHeadline}
+                onChange={(e) => { setTempHeadline(e.target.value); setMenuTextSaved(false); }}
+                className="w-full bg-gray-700 border border-gray-600 rounded-lg p-3 mb-3 text-white placeholder-gray-400 focus:border-purple-500 focus:outline-none resize-none"
+              />
+              <label className="text-gray-400 text-xs mb-1 block">Subtext</label>
+              <textarea
+                rows={2}
+                placeholder="e.g. Pickup in Denver. Pay via Venmo or cash at pickup."
+                value={tempSubline}
+                onChange={(e) => { setTempSubline(e.target.value); setMenuTextSaved(false); }}
+                className="w-full bg-gray-700 border border-gray-600 rounded-lg p-3 mb-3 text-white placeholder-gray-400 focus:border-purple-500 focus:outline-none resize-none"
+              />
+              <button
+                onClick={saveMenuText}
+                className="bg-purple-600 hover:bg-purple-500 text-white px-4 py-2 rounded-lg font-medium"
+              >
+                {menuTextSaved ? '✓ Saved' : 'Save'}
+              </button>
+            </div>
 
             {/* Add New Item */}
             <div className="bg-gray-800 rounded-lg p-4 shadow-lg border border-gray-700 mb-4">
@@ -1796,91 +1871,9 @@ export default function App() {
           </div>
         )}
 
-        {/* Availability Calendar View */}
-        {view === 'availability' && isAdmin && (
-          <div className="animate-fadeIn">
-            <AdminNav activeView={view} onNavigate={(v) => { if (v === 'prep' && !prepDate) setPrepDate(getNextPrepDate()); setView(v); }} orders={orders} />
-
-            <div className="bg-gray-800 rounded-lg p-4 shadow-lg border border-gray-700">
-              <div className="flex justify-between items-center mb-4">
-                <button
-                  onClick={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1))}
-                  className="text-purple-400 hover:text-purple-300 px-3 py-1"
-                >
-                  ← Prev
-                </button>
-                <h3 className="font-bold text-white text-lg">
-                  {calendarMonth.toLocaleString('default', { month: 'long', year: 'numeric' })}
-                </h3>
-                <button
-                  onClick={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1))}
-                  className="text-purple-400 hover:text-purple-300 px-3 py-1"
-                >
-                  Next →
-                </button>
-              </div>
-
-              <p className="text-gray-400 text-sm mb-4 text-center">
-                Click a date to block/unblock it. Blocked dates will show as unavailable to customers.
-              </p>
-
-              <div className="grid grid-cols-7 gap-1 mb-2">
-                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-                  <div key={day} className="text-center text-gray-500 text-xs py-2">
-                    {day}
-                  </div>
-                ))}
-              </div>
-
-              <div className="grid grid-cols-7 gap-1">
-                {getCalendarDays(calendarMonth).map((date, idx) => {
-                  if (!date) {
-                    return <div key={`empty-${idx}`} className="aspect-square" />;
-                  }
-
-                  const dateString = formatDateString(date);
-                  const isBlocked = isDateBlocked(dateString);
-                  const isPast = isPastDate(date);
-                  const isToday = formatDateString(new Date()) === dateString;
-
-                  return (
-                    <button
-                      key={dateString}
-                      onClick={() => !isPast && toggleBlockedDate(dateString)}
-                      disabled={isPast}
-                      className={`aspect-square rounded-lg text-sm font-medium transition-colors ${
-                        isPast
-                          ? 'bg-gray-800 text-gray-600 cursor-not-allowed'
-                          : isBlocked
-                            ? 'bg-red-900 text-red-300 hover:bg-red-800'
-                            : 'bg-gray-700 text-white hover:bg-gray-600'
-                      } ${isToday ? 'ring-2 ring-purple-500' : ''}`}
-                    >
-                      {date.getDate()}
-                    </button>
-                  );
-                })}
-              </div>
-
-              <div className="flex gap-4 justify-center mt-4 text-sm">
-                <div className="flex items-center gap-2">
-                  <div className="w-4 h-4 bg-gray-700 rounded"></div>
-                  <span className="text-gray-400">Available</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-4 h-4 bg-red-900 rounded"></div>
-                  <span className="text-gray-400">Blocked</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* Settings View */}
         {view === 'settings' && isAdmin && (
           <div className="animate-fadeIn">
-            <AdminNav activeView={view} onNavigate={(v) => { if (v === 'prep' && !prepDate) setPrepDate(getNextPrepDate()); setView(v); }} orders={orders} />
-
             <div className="bg-gray-800 rounded-lg p-4 shadow-lg border border-gray-700">
               <h3 className="font-bold text-white mb-4">Email Notifications</h3>
               <p className="text-gray-400 text-sm mb-3">
@@ -1949,31 +1942,94 @@ export default function App() {
               </div>
             )}
 
-            <div className="bg-gray-800 rounded-lg p-4 shadow-lg border border-gray-700 mt-4">
-              <h3 className="font-bold text-white mb-2">Menu Header</h3>
-              <p className="text-gray-400 text-sm mb-3">The headline and subtext shown above your menu.</p>
-              <label className="text-gray-400 text-xs mb-1 block">Headline</label>
-              <textarea
-                rows={2}
-                placeholder="e.g. Everything is baked fresh by Theresa in small batches."
-                value={tempHeadline}
-                onChange={(e) => { setTempHeadline(e.target.value); setMenuTextSaved(false); }}
-                className="w-full bg-gray-700 border border-gray-600 rounded-lg p-3 mb-3 text-white placeholder-gray-400 focus:border-purple-500 focus:outline-none resize-none"
-              />
-              <label className="text-gray-400 text-xs mb-1 block">Subtext</label>
-              <textarea
-                rows={2}
-                placeholder="e.g. Pickup in Denver. Pay via Venmo or cash at pickup."
-                value={tempSubline}
-                onChange={(e) => { setTempSubline(e.target.value); setMenuTextSaved(false); }}
-                className="w-full bg-gray-700 border border-gray-600 rounded-lg p-3 mb-3 text-white placeholder-gray-400 focus:border-purple-500 focus:outline-none resize-none"
-              />
+            {/* Blocked Dates - collapsible */}
+            <div className="bg-gray-800 rounded-lg shadow-lg border border-gray-700 mt-4 overflow-hidden">
               <button
-                onClick={saveMenuText}
-                className="bg-purple-600 hover:bg-purple-500 text-white px-4 py-2 rounded-lg font-medium"
+                onClick={() => setBlockedDatesOpen(!blockedDatesOpen)}
+                className="w-full flex justify-between items-center p-4"
               >
-                {menuTextSaved ? '✓ Saved' : 'Save'}
+                <div>
+                  <h3 className="font-bold text-white text-left">Blocked Dates</h3>
+                  <p className="text-gray-400 text-sm mt-0.5 text-left">{blockedDates.length} date{blockedDates.length !== 1 ? 's' : ''} blocked</p>
+                </div>
+                <svg xmlns="http://www.w3.org/2000/svg" className={`w-5 h-5 text-gray-400 transition-transform ${blockedDatesOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                </svg>
               </button>
+              {blockedDatesOpen && (
+                <div className="px-4 pb-4">
+                  <p className="text-gray-400 text-sm mb-4 text-center">
+                    Click a date to block/unblock it. Blocked dates will show as unavailable to customers.
+                  </p>
+
+                  <div className="flex justify-between items-center mb-4">
+                    <button
+                      onClick={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1))}
+                      className="text-purple-400 hover:text-purple-300 px-3 py-1"
+                    >
+                      ← Prev
+                    </button>
+                    <h3 className="font-bold text-white text-lg">
+                      {calendarMonth.toLocaleString('default', { month: 'long', year: 'numeric' })}
+                    </h3>
+                    <button
+                      onClick={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1))}
+                      className="text-purple-400 hover:text-purple-300 px-3 py-1"
+                    >
+                      Next →
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-7 gap-1 mb-2">
+                    {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+                      <div key={day} className="text-center text-gray-500 text-xs py-2">
+                        {day}
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="grid grid-cols-7 gap-1">
+                    {getCalendarDays(calendarMonth).map((date, idx) => {
+                      if (!date) {
+                        return <div key={`empty-${idx}`} className="aspect-square" />;
+                      }
+
+                      const dateString = formatDateString(date);
+                      const isBlocked = isDateBlocked(dateString);
+                      const isPast = isPastDate(date);
+                      const isToday = formatDateString(new Date()) === dateString;
+
+                      return (
+                        <button
+                          key={dateString}
+                          onClick={() => !isPast && toggleBlockedDate(dateString)}
+                          disabled={isPast}
+                          className={`aspect-square rounded-lg text-sm font-medium transition-colors ${
+                            isPast
+                              ? 'bg-gray-800 text-gray-600 cursor-not-allowed'
+                              : isBlocked
+                                ? 'bg-red-900 text-red-300 hover:bg-red-800'
+                                : 'bg-gray-700 text-white hover:bg-gray-600'
+                          } ${isToday ? 'ring-2 ring-purple-500' : ''}`}
+                        >
+                          {date.getDate()}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div className="flex gap-4 justify-center mt-4 text-sm">
+                    <div className="flex items-center gap-2">
+                      <div className="w-4 h-4 bg-gray-700 rounded"></div>
+                      <span className="text-gray-400">Available</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-4 h-4 bg-red-900 rounded"></div>
+                      <span className="text-gray-400">Blocked</span>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="bg-gray-800 rounded-lg p-4 shadow-lg border border-gray-700 mt-4">
@@ -1993,152 +2049,343 @@ export default function App() {
         {/* Orders View */}
         {view === 'orders' && isAdmin && (
           <div className="animate-fadeIn">
-            <AdminNav activeView={view} onNavigate={(v) => { if (v === 'prep' && !prepDate) setPrepDate(getNextPrepDate()); setView(v); }} orders={orders} />
-
-            {/* View Mode Tabs */}
-            <div className="flex gap-2 mb-4 items-center">
-              <button
-                onClick={() => setOrdersViewMode('calendar')}
-                className={`px-4 py-2 rounded-lg font-medium text-sm ${
-                  ordersViewMode === 'calendar'
-                    ? 'bg-purple-600 text-white'
-                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                }`}
-              >
-                📅 Calendar
-              </button>
-              <button
-                onClick={() => setOrdersViewMode('list')}
-                className={`px-4 py-2 rounded-lg font-medium text-sm ${
-                  ordersViewMode === 'list'
-                    ? 'bg-purple-600 text-white'
-                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                }`}
-              >
-                📋 List
-              </button>
-              <button
-                onClick={loadOrders}
-                className="ml-auto px-3 py-2 rounded-lg text-sm bg-gray-700 text-gray-300 hover:bg-gray-600"
-                title="Refresh orders"
-              >
-                🔄
-              </button>
-            </div>
-
-            {/* Status Filters */}
-            <div className="flex flex-wrap gap-2 mb-4">
-              <span className="text-gray-400 text-sm py-1">Filter:</span>
+            {/* Sub-navigation */}
+            <div className="flex gap-1 mb-4 bg-gray-800 rounded-lg p-1">
               {[
-                { value: 'all', label: 'All' },
-                { value: 'placed', label: 'Placed', color: 'bg-yellow-600' },
-                { value: 'confirmed', label: 'Confirmed', color: 'bg-blue-600' },
-                { value: 'baking', label: 'Baking', color: 'bg-orange-500' },
-                { value: 'ready', label: 'Ready', color: 'bg-emerald-600' },
-                { value: 'complete', label: 'Complete', color: 'bg-green-600' },
-              ].map(filter => (
+                { key: 'prep', label: '\uD83E\uDDD1\u200D\uD83C\uDF73 Prep' },
+                { key: 'calendar', label: '\uD83D\uDCC5 Calendar' },
+                { key: 'all', label: '\uD83D\uDCCB All' },
+              ].map(tab => (
                 <button
-                  key={filter.value}
-                  onClick={() => setStatusFilter(filter.value)}
-                  className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
-                    statusFilter === filter.value
-                      ? `${filter.color || 'bg-purple-600'} text-white`
-                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                  key={tab.key}
+                  onClick={() => {
+                    if (tab.key === 'prep' && ordersSubView !== 'prep') setPrepDate('');
+                    setOrdersSubView(tab.key);
+                  }}
+                  className={`flex-1 py-2 rounded-md font-medium text-sm transition-colors ${
+                    ordersSubView === tab.key ? 'bg-purple-600 text-white' : 'text-gray-400 hover:text-white'
                   }`}
                 >
-                  {filter.label} ({
-                    filter.value === 'all'
-                      ? orders.length
-                      : orders.filter(o => normalizeStatus(o) === filter.value).length
-                  })
+                  {tab.label}
                 </button>
               ))}
             </div>
 
-            {/* Calendar View */}
-            {ordersViewMode === 'calendar' && (
-              <div className="bg-gray-800 rounded-lg p-4 shadow-lg border border-gray-700">
-                <div className="flex justify-between items-center mb-4">
-                  <button
-                    onClick={() => setOrderCalendarMonth(new Date(orderCalendarMonth.getFullYear(), orderCalendarMonth.getMonth() - 1))}
-                    className="text-purple-400 hover:text-purple-300 px-3 py-1"
-                  >
-                    ← Prev
-                  </button>
-                  <h3 className="font-bold text-white text-lg">
-                    {orderCalendarMonth.toLocaleString('default', { month: 'long', year: 'numeric' })}
-                  </h3>
-                  <button
-                    onClick={() => setOrderCalendarMonth(new Date(orderCalendarMonth.getFullYear(), orderCalendarMonth.getMonth() + 1))}
-                    className="text-purple-400 hover:text-purple-300 px-3 py-1"
-                  >
-                    Next →
-                  </button>
-                </div>
+            {ordersSubView === 'prep' && (
+              <>
+                {!prepDate ? (
+                  /* Upcoming dates overview */
+                  (() => {
+                    const today = formatDateString(new Date());
+                    const upcomingMap = {};
+                    orders.forEach(o => {
+                      if (!o.requested_date || o.requested_date < today) return;
+                      if (!upcomingMap[o.requested_date]) upcomingMap[o.requested_date] = [];
+                      upcomingMap[o.requested_date].push(o);
+                    });
+                    const upcomingDates = Object.keys(upcomingMap).sort();
 
-                <div className="grid grid-cols-7 gap-1 mb-2">
-                  {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-                    <div key={day} className="text-center text-gray-500 text-xs py-2">
-                      {day}
-                    </div>
-                  ))}
-                </div>
-
-                <div className="grid grid-cols-7 gap-1">
-                  {getCalendarDays(orderCalendarMonth).map((date, idx) => {
-                    if (!date) {
-                      return <div key={`empty-${idx}`} className="aspect-square" />;
+                    if (upcomingDates.length === 0) {
+                      return (
+                        <div className="text-center py-12">
+                          <div className="text-5xl mb-3">📭</div>
+                          <p className="text-white font-medium mb-1">No upcoming orders</p>
+                          <p className="text-gray-500 text-sm">Orders will show up here as they come in.</p>
+                        </div>
+                      );
                     }
 
-                    const dateString = formatDateString(date);
-                    const dayOrders = getOrdersForDate(dateString).filter(order => {
-                      if (statusFilter === 'all') return true;
-                      return normalizeStatus(order) === statusFilter;
+                    return (
+                      <div className="space-y-3">
+                        {upcomingDates.map(dateStr => {
+                          const dateOrders = upcomingMap[dateStr];
+                          const totalItems = dateOrders.reduce((sum, o) => sum + (o.items || []).reduce((s, i) => s + i.quantity, 0), 0);
+                          const totalRevenue = dateOrders.reduce((sum, o) => sum + (o.total || 0), 0);
+                          const needsAction = dateOrders.filter(o => normalizeStatus(o) === 'placed').length;
+                          const displayDate = new Date(dateStr + 'T12:00:00');
+                          const isToday = dateStr === today;
+                          const tomorrow = new Date();
+                          tomorrow.setDate(tomorrow.getDate() + 1);
+                          const isTomorrow = dateStr === formatDateString(tomorrow);
+
+                          return (
+                            <button
+                              key={dateStr}
+                              onClick={() => setPrepDate(dateStr)}
+                              className="w-full text-left bg-gray-800 rounded-lg p-4 border border-gray-700 hover:border-purple-500 transition-colors"
+                            >
+                              <div className="flex justify-between items-start mb-2">
+                                <div>
+                                  <p className="text-white font-bold text-lg">
+                                    {isToday ? 'Today' : isTomorrow ? 'Tomorrow' : displayDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                                  </p>
+                                  <p className="text-gray-500 text-xs">
+                                    {!isToday && !isTomorrow && displayDate.toLocaleDateString('en-US', { weekday: 'long' })}
+                                  </p>
+                                </div>
+                                <div className="text-right">
+                                  <p className="text-amber-400 font-semibold">{formatPrice(totalRevenue)}</p>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-4 text-sm text-gray-400">
+                                <span>{dateOrders.length} order{dateOrders.length !== 1 ? 's' : ''}</span>
+                                <span>{totalItems} item{totalItems !== 1 ? 's' : ''}</span>
+                                {needsAction > 0 && (
+                                  <span className="text-yellow-400">{needsAction} needs confirmation</span>
+                                )}
+                              </div>
+                              {/* Quick item preview */}
+                              <div className="mt-2 flex flex-wrap gap-1">
+                                {(() => {
+                                  const itemCounts = {};
+                                  dateOrders.forEach(o => (o.items || []).forEach(i => {
+                                    itemCounts[i.emoji] = (itemCounts[i.emoji] || 0) + i.quantity;
+                                  }));
+                                  return Object.entries(itemCounts).slice(0, 6).map(([emoji, qty]) => (
+                                    <span key={emoji} className="text-xs bg-gray-700 rounded-full px-2 py-0.5 text-gray-300">
+                                      {emoji} x{qty}
+                                    </span>
+                                  ));
+                                })()}
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()
+                ) : (
+                  /* Baking list drill-in for selected date */
+                  (() => {
+                    const prepOrders = orders.filter(o => o.requested_date === prepDate);
+                    const displayDate = new Date(prepDate + 'T12:00:00');
+                    const itemMap = {};
+                    prepOrders.forEach(order => {
+                      (order.items || []).forEach(item => {
+                        const key = `${item.name}|${item.selectedOption || ''}`;
+                        if (!itemMap[key]) {
+                          itemMap[key] = { emoji: item.emoji, name: item.name, option: item.selectedOption || '', quantity: 0 };
+                        }
+                        itemMap[key].quantity += item.quantity;
+                      });
                     });
-                    const isToday = formatDateString(new Date()) === dateString;
+                    const bakingList = Object.values(itemMap).sort((a, b) => b.quantity - a.quantity);
 
                     return (
-                      <div
-                        key={dateString}
-                        className={`min-h-24 rounded-lg bg-gray-700 p-1 ${isToday ? 'ring-2 ring-purple-500' : ''}`}
-                      >
-                        <div className="text-xs text-gray-400 mb-1">{date.getDate()}</div>
-                        <div className="space-y-1">
-                          {dayOrders.slice(0, 3).map(order => (
+                      <>
+                        <div className="no-print flex items-center gap-3 mb-4">
+                          <button
+                            onClick={() => setPrepDate('')}
+                            className="text-purple-400 hover:text-purple-300 text-sm"
+                          >
+                            ← Back
+                          </button>
+                          <h2 className="text-white font-bold text-lg">
+                            {displayDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+                          </h2>
+                        </div>
+
+                        {/* Aggregated baking list */}
+                        <div className="bg-gray-800 rounded-lg p-4 shadow-lg border border-gray-700 mb-4">
+                          <div className="flex justify-between items-center mb-3">
+                            <h3 className="font-bold text-white text-xl">
+                              Baking List - {prepOrders.length} order{prepOrders.length !== 1 ? 's' : ''}
+                            </h3>
                             <button
-                              key={order.id}
-                              onClick={() => setSelectedOrder(order)}
-                              className={`w-full text-left text-xs p-1 rounded truncate text-white ${getOrderStatusColor(order)} hover:opacity-80`}
+                              onClick={() => window.print()}
+                              className="no-print text-sm bg-gray-700 hover:bg-gray-600 text-gray-300 px-3 py-1 rounded"
                             >
-                              {order.customer_name}
+                              🖨️ Print
                             </button>
-                          ))}
-                          {dayOrders.length > 3 && (
-                            <div className="text-xs text-gray-400 text-center">
-                              +{dayOrders.length - 3} more
+                          </div>
+                          {bakingList.length === 0 ? (
+                            <p className="text-gray-500 text-sm">No orders for this date.</p>
+                          ) : (
+                            <div className="space-y-2">
+                              {bakingList.map((row, idx) => (
+                                <div key={idx} className="flex items-center gap-3 text-gray-200 py-1 border-b border-gray-700 last:border-0">
+                                  <span className="text-xl">{row.emoji}</span>
+                                  <span className="flex-1">
+                                    {row.name}
+                                    {row.option && <span className="text-purple-400 text-sm ml-1">({row.option})</span>}
+                                  </span>
+                                  <span className="font-bold text-white text-lg">x {row.quantity}</span>
+                                </div>
+                              ))}
                             </div>
                           )}
                         </div>
-                      </div>
-                    );
-                  })}
-                </div>
 
-                {/* Legend */}
-                <div className="flex flex-wrap gap-4 justify-center mt-4 text-sm">
-                  {STATUS_STEPS.map(step => (
-                    <div key={step} className="flex items-center gap-2">
-                      <div className={`w-4 h-4 ${STATUS_CONFIG[step].color} rounded`}></div>
-                      <span className="text-gray-400">{STATUS_CONFIG[step].label}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
+                        {/* Individual orders */}
+                        {prepOrders.length > 0 && (
+                          <>
+                            <h3 className="font-bold text-white mb-3">Individual Orders</h3>
+                            <div className="space-y-3">
+                              {prepOrders.map(order => (
+                                <OrderCard
+                                  key={order.id}
+                                  order={order}
+                                  formatPrice={formatPrice}
+                                  formatFulfillmentType={formatFulfillmentType}
+                                  getOrderStatusColor={getOrderStatusColor}
+                                  getOrderStatusText={getOrderStatusText}
+                                  onAdvanceStatus={advanceOrderStatus}
+                                  toggleOrderPaid={toggleOrderPaid}
+                                  deleteOrder={deleteOrder}
+                                />
+                              ))}
+                            </div>
+                          </>
+                        )}
+                      </>
+                    );
+                  })()
+                )}
+              </>
             )}
 
-            {/* List View */}
-            {ordersViewMode === 'list' && (
-              <div>
+            {ordersSubView === 'calendar' && (
+              <>
+                {/* Status Filters */}
+                <div className="flex flex-wrap gap-2 mb-4">
+                  <span className="text-gray-400 text-sm py-1">Filter:</span>
+                  {[
+                    { value: 'all', label: 'All' },
+                    { value: 'placed', label: 'Placed', color: 'bg-yellow-600' },
+                    { value: 'confirmed', label: 'Confirmed', color: 'bg-blue-600' },
+                    { value: 'baking', label: 'Baking', color: 'bg-orange-500' },
+                    { value: 'ready', label: 'Ready', color: 'bg-emerald-600' },
+                    { value: 'complete', label: 'Complete', color: 'bg-green-600' },
+                  ].map(filter => (
+                    <button
+                      key={filter.value}
+                      onClick={() => setStatusFilter(filter.value)}
+                      className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
+                        statusFilter === filter.value
+                          ? `${filter.color || 'bg-purple-600'} text-white`
+                          : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                      }`}
+                    >
+                      {filter.label} ({
+                        filter.value === 'all'
+                          ? orders.length
+                          : orders.filter(o => normalizeStatus(o) === filter.value).length
+                      })
+                    </button>
+                  ))}
+                </div>
+
+                <div className="bg-gray-800 rounded-lg p-4 shadow-lg border border-gray-700">
+                  <div className="flex justify-between items-center mb-4">
+                    <button
+                      onClick={() => setOrderCalendarMonth(new Date(orderCalendarMonth.getFullYear(), orderCalendarMonth.getMonth() - 1))}
+                      className="text-purple-400 hover:text-purple-300 px-3 py-1"
+                    >
+                      ← Prev
+                    </button>
+                    <h3 className="font-bold text-white text-lg">
+                      {orderCalendarMonth.toLocaleString('default', { month: 'long', year: 'numeric' })}
+                    </h3>
+                    <button
+                      onClick={() => setOrderCalendarMonth(new Date(orderCalendarMonth.getFullYear(), orderCalendarMonth.getMonth() + 1))}
+                      className="text-purple-400 hover:text-purple-300 px-3 py-1"
+                    >
+                      Next →
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-7 gap-1 mb-2">
+                    {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+                      <div key={day} className="text-center text-gray-500 text-xs py-2">
+                        {day}
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="grid grid-cols-7 gap-1">
+                    {getCalendarDays(orderCalendarMonth).map((date, idx) => {
+                      if (!date) {
+                        return <div key={`empty-${idx}`} className="aspect-square" />;
+                      }
+
+                      const dateString = formatDateString(date);
+                      const dayOrders = getOrdersForDate(dateString).filter(order => {
+                        if (statusFilter === 'all') return true;
+                        return normalizeStatus(order) === statusFilter;
+                      });
+                      const isToday = formatDateString(new Date()) === dateString;
+
+                      return (
+                        <div
+                          key={dateString}
+                          className={`min-h-24 rounded-lg bg-gray-700 p-1 ${isToday ? 'ring-2 ring-purple-500' : ''}`}
+                        >
+                          <div className="text-xs text-gray-400 mb-1">{date.getDate()}</div>
+                          <div className="space-y-1">
+                            {dayOrders.slice(0, 3).map(order => (
+                              <button
+                                key={order.id}
+                                onClick={() => setSelectedOrder(order)}
+                                className={`w-full text-left text-xs p-1 rounded truncate text-white ${getOrderStatusColor(order)} hover:opacity-80`}
+                              >
+                                {order.customer_name}
+                              </button>
+                            ))}
+                            {dayOrders.length > 3 && (
+                              <div className="text-xs text-gray-400 text-center">
+                                +{dayOrders.length - 3} more
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Legend */}
+                  <div className="flex flex-wrap gap-4 justify-center mt-4 text-sm">
+                    {STATUS_STEPS.map(step => (
+                      <div key={step} className="flex items-center gap-2">
+                        <div className={`w-4 h-4 ${STATUS_CONFIG[step].color} rounded`}></div>
+                        <span className="text-gray-400">{STATUS_CONFIG[step].label}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+
+            {ordersSubView === 'all' && (
+              <>
+                {/* Status Filters */}
+                <div className="flex flex-wrap gap-2 mb-4">
+                  <span className="text-gray-400 text-sm py-1">Filter:</span>
+                  {[
+                    { value: 'all', label: 'All' },
+                    { value: 'placed', label: 'Placed', color: 'bg-yellow-600' },
+                    { value: 'confirmed', label: 'Confirmed', color: 'bg-blue-600' },
+                    { value: 'baking', label: 'Baking', color: 'bg-orange-500' },
+                    { value: 'ready', label: 'Ready', color: 'bg-emerald-600' },
+                    { value: 'complete', label: 'Complete', color: 'bg-green-600' },
+                  ].map(filter => (
+                    <button
+                      key={filter.value}
+                      onClick={() => setStatusFilter(filter.value)}
+                      className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
+                        statusFilter === filter.value
+                          ? `${filter.color || 'bg-purple-600'} text-white`
+                          : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                      }`}
+                    >
+                      {filter.label} ({
+                        filter.value === 'all'
+                          ? orders.length
+                          : orders.filter(o => normalizeStatus(o) === filter.value).length
+                      })
+                    </button>
+                  ))}
+                </div>
+
                 <button
                   onClick={loadOrders}
                   className="w-full mb-4 bg-gray-700 hover:bg-gray-600 text-gray-300 py-2 rounded-lg text-sm"
@@ -2169,183 +2416,7 @@ export default function App() {
                     ))}
                   </div>
                 )}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Feature 3: Prep View */}
-        {view === 'prep' && isAdmin && (
-          <div className="animate-fadeIn">
-            <AdminNav activeView={view} onNavigate={(v) => { if (v === 'prep') setPrepDate(''); setView(v); }} orders={orders} />
-
-            {!prepDate ? (
-              /* Upcoming dates overview */
-              (() => {
-                const today = formatDateString(new Date());
-                const upcomingMap = {};
-                orders.forEach(o => {
-                  if (!o.requested_date || o.requested_date < today) return;
-                  if (!upcomingMap[o.requested_date]) upcomingMap[o.requested_date] = [];
-                  upcomingMap[o.requested_date].push(o);
-                });
-                const upcomingDates = Object.keys(upcomingMap).sort();
-
-                if (upcomingDates.length === 0) {
-                  return (
-                    <div className="text-center py-12">
-                      <div className="text-5xl mb-3">📭</div>
-                      <p className="text-white font-medium mb-1">No upcoming orders</p>
-                      <p className="text-gray-500 text-sm">Orders will show up here as they come in.</p>
-                    </div>
-                  );
-                }
-
-                return (
-                  <div className="space-y-3">
-                    {upcomingDates.map(dateStr => {
-                      const dateOrders = upcomingMap[dateStr];
-                      const totalItems = dateOrders.reduce((sum, o) => sum + (o.items || []).reduce((s, i) => s + i.quantity, 0), 0);
-                      const totalRevenue = dateOrders.reduce((sum, o) => sum + (o.total || 0), 0);
-                      const needsAction = dateOrders.filter(o => normalizeStatus(o) === 'placed').length;
-                      const displayDate = new Date(dateStr + 'T12:00:00');
-                      const isToday = dateStr === today;
-                      const tomorrow = new Date();
-                      tomorrow.setDate(tomorrow.getDate() + 1);
-                      const isTomorrow = dateStr === formatDateString(tomorrow);
-
-                      return (
-                        <button
-                          key={dateStr}
-                          onClick={() => setPrepDate(dateStr)}
-                          className="w-full text-left bg-gray-800 rounded-lg p-4 border border-gray-700 hover:border-purple-500 transition-colors"
-                        >
-                          <div className="flex justify-between items-start mb-2">
-                            <div>
-                              <p className="text-white font-bold text-lg">
-                                {isToday ? 'Today' : isTomorrow ? 'Tomorrow' : displayDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
-                              </p>
-                              <p className="text-gray-500 text-xs">
-                                {!isToday && !isTomorrow && displayDate.toLocaleDateString('en-US', { weekday: 'long' })}
-                              </p>
-                            </div>
-                            <div className="text-right">
-                              <p className="text-amber-400 font-semibold">{formatPrice(totalRevenue)}</p>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-4 text-sm text-gray-400">
-                            <span>{dateOrders.length} order{dateOrders.length !== 1 ? 's' : ''}</span>
-                            <span>{totalItems} item{totalItems !== 1 ? 's' : ''}</span>
-                            {needsAction > 0 && (
-                              <span className="text-yellow-400">{needsAction} needs confirmation</span>
-                            )}
-                          </div>
-                          {/* Quick item preview */}
-                          <div className="mt-2 flex flex-wrap gap-1">
-                            {(() => {
-                              const itemCounts = {};
-                              dateOrders.forEach(o => (o.items || []).forEach(i => {
-                                itemCounts[i.emoji] = (itemCounts[i.emoji] || 0) + i.quantity;
-                              }));
-                              return Object.entries(itemCounts).slice(0, 6).map(([emoji, qty]) => (
-                                <span key={emoji} className="text-xs bg-gray-700 rounded-full px-2 py-0.5 text-gray-300">
-                                  {emoji} x{qty}
-                                </span>
-                              ));
-                            })()}
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                );
-              })()
-            ) : (
-              /* Baking list drill-in for selected date */
-              (() => {
-                const prepOrders = orders.filter(o => o.requested_date === prepDate);
-                const displayDate = new Date(prepDate + 'T12:00:00');
-                const itemMap = {};
-                prepOrders.forEach(order => {
-                  (order.items || []).forEach(item => {
-                    const key = `${item.name}|${item.selectedOption || ''}`;
-                    if (!itemMap[key]) {
-                      itemMap[key] = { emoji: item.emoji, name: item.name, option: item.selectedOption || '', quantity: 0 };
-                    }
-                    itemMap[key].quantity += item.quantity;
-                  });
-                });
-                const bakingList = Object.values(itemMap).sort((a, b) => b.quantity - a.quantity);
-
-                return (
-                  <>
-                    <div className="no-print flex items-center gap-3 mb-4">
-                      <button
-                        onClick={() => setPrepDate('')}
-                        className="text-purple-400 hover:text-purple-300 text-sm"
-                      >
-                        ← Back
-                      </button>
-                      <h2 className="text-white font-bold text-lg">
-                        {displayDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
-                      </h2>
-                    </div>
-
-                    {/* Aggregated baking list */}
-                    <div className="bg-gray-800 rounded-lg p-4 shadow-lg border border-gray-700 mb-4">
-                      <div className="flex justify-between items-center mb-3">
-                        <h3 className="font-bold text-white text-xl">
-                          Baking List - {prepOrders.length} order{prepOrders.length !== 1 ? 's' : ''}
-                        </h3>
-                        <button
-                          onClick={() => window.print()}
-                          className="no-print text-sm bg-gray-700 hover:bg-gray-600 text-gray-300 px-3 py-1 rounded"
-                        >
-                          🖨️ Print
-                        </button>
-                      </div>
-                      {bakingList.length === 0 ? (
-                        <p className="text-gray-500 text-sm">No orders for this date.</p>
-                      ) : (
-                        <div className="space-y-2">
-                          {bakingList.map((row, idx) => (
-                            <div key={idx} className="flex items-center gap-3 text-gray-200 py-1 border-b border-gray-700 last:border-0">
-                              <span className="text-xl">{row.emoji}</span>
-                              <span className="flex-1">
-                                {row.name}
-                                {row.option && <span className="text-purple-400 text-sm ml-1">({row.option})</span>}
-                              </span>
-                              <span className="font-bold text-white text-lg">x {row.quantity}</span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Individual orders */}
-                    {prepOrders.length > 0 && (
-                      <>
-                        <h3 className="font-bold text-white mb-3">Individual Orders</h3>
-                        <div className="space-y-3">
-                          {prepOrders.map(order => (
-                            <OrderCard
-                              key={order.id}
-                              order={order}
-                              formatPrice={formatPrice}
-                              formatFulfillmentType={formatFulfillmentType}
-                              getOrderStatusColor={getOrderStatusColor}
-                              getOrderStatusText={getOrderStatusText}
-                              onAdvanceStatus={advanceOrderStatus}
-                              toggleOrderPaid={toggleOrderPaid}
-                              deleteOrder={deleteOrder}
-                            />
-                          ))}
-                        </div>
-                      </>
-                    )}
-                  </>
-                );
-              })()
+              </>
             )}
           </div>
         )}
@@ -2413,6 +2484,18 @@ export default function App() {
             </button>
           </div>
         </div>
+      )}
+
+      {/* Admin Bottom Nav */}
+      {isAdmin && (
+        <AdminBottomNav
+          activeView={view}
+          onNavigate={(v) => {
+            if (v === 'orders' && view !== 'orders') setPrepDate('');
+            setView(v);
+          }}
+          orders={orders}
+        />
       )}
 
       {/* Footer */}
