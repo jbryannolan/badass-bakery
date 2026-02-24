@@ -242,7 +242,7 @@ function AdminNav({ activeView, onNavigate, orders }) {
   const tabs = [
     { view: 'admin', label: 'Items' },
     { view: 'orders', label: `Orders (${orders.filter(o => normalizeStatus(o) !== 'complete').length})` },
-    { view: 'prep', label: 'Prep' },
+    { view: 'prep', label: 'Upcoming' },
     { view: 'availability', label: 'Dates' },
     { view: 'settings', label: 'Settings' },
   ];
@@ -2035,87 +2035,176 @@ export default function App() {
         {/* Feature 3: Prep View */}
         {view === 'prep' && isAdmin && (
           <div className="animate-fadeIn">
-            <AdminNav activeView={view} onNavigate={(v) => { if (v === 'prep' && !prepDate) setPrepDate(getNextPrepDate()); setView(v); }} orders={orders} />
+            <AdminNav activeView={view} onNavigate={(v) => { if (v === 'prep') setPrepDate(''); setView(v); }} orders={orders} />
 
-            <div className="no-print mb-4">
-              <label className="text-gray-400 text-sm mb-1 block">Prep for:</label>
-              <input
-                type="date"
-                value={prepDate}
-                onChange={(e) => setPrepDate(e.target.value)}
-                className="bg-gray-700 border border-gray-600 rounded p-2 text-white focus:border-purple-500 focus:outline-none"
-              />
-            </div>
-
-            {(() => {
-              const prepOrders = orders.filter(o => o.requested_date === prepDate);
-              // Aggregate baking list
-              const itemMap = {};
-              prepOrders.forEach(order => {
-                (order.items || []).forEach(item => {
-                  const key = `${item.name}|${item.selectedOption || ''}`;
-                  if (!itemMap[key]) {
-                    itemMap[key] = { emoji: item.emoji, name: item.name, option: item.selectedOption || '', quantity: 0 };
-                  }
-                  itemMap[key].quantity += item.quantity;
+            {!prepDate ? (
+              /* Upcoming dates overview */
+              (() => {
+                const today = formatDateString(new Date());
+                const upcomingMap = {};
+                orders.forEach(o => {
+                  if (!o.requested_date || o.requested_date < today) return;
+                  if (!upcomingMap[o.requested_date]) upcomingMap[o.requested_date] = [];
+                  upcomingMap[o.requested_date].push(o);
                 });
-              });
-              const bakingList = Object.values(itemMap).sort((a, b) => b.quantity - a.quantity);
+                const upcomingDates = Object.keys(upcomingMap).sort();
 
-              return (
-                <>
-                  {/* Aggregated baking list */}
-                  <div className="bg-gray-800 rounded-lg p-4 shadow-lg border border-gray-700 mb-4">
-                    <div className="flex justify-between items-center mb-3">
-                      <h3 className="font-bold text-white text-xl">
-                        Baking List - {prepOrders.length} order{prepOrders.length !== 1 ? 's' : ''}
-                      </h3>
-                      <button
-                        onClick={() => window.print()}
-                        className="no-print text-sm bg-gray-700 hover:bg-gray-600 text-gray-300 px-3 py-1 rounded"
-                      >
-                        🖨️ Print
-                      </button>
+                if (upcomingDates.length === 0) {
+                  return (
+                    <div className="text-center py-12">
+                      <div className="text-5xl mb-3">📭</div>
+                      <p className="text-white font-medium mb-1">No upcoming orders</p>
+                      <p className="text-gray-500 text-sm">Orders will show up here as they come in.</p>
                     </div>
-                    {bakingList.length === 0 ? (
-                      <p className="text-gray-500 text-sm">No orders for this date.</p>
-                    ) : (
-                      <div className="space-y-2">
-                        {bakingList.map((row, idx) => (
-                          <div key={idx} className="flex items-center gap-3 text-gray-200">
-                            <span className="text-xl">{row.emoji}</span>
-                            <span className="flex-1">
-                              {row.name}
-                              {row.option && <span className="text-purple-400 text-sm ml-1">({row.option})</span>}
-                            </span>
-                            <span className="font-bold text-white">x {row.quantity}</span>
+                  );
+                }
+
+                return (
+                  <div className="space-y-3">
+                    {upcomingDates.map(dateStr => {
+                      const dateOrders = upcomingMap[dateStr];
+                      const totalItems = dateOrders.reduce((sum, o) => sum + (o.items || []).reduce((s, i) => s + i.quantity, 0), 0);
+                      const totalRevenue = dateOrders.reduce((sum, o) => sum + (o.total || 0), 0);
+                      const needsAction = dateOrders.filter(o => normalizeStatus(o) === 'placed').length;
+                      const displayDate = new Date(dateStr + 'T12:00:00');
+                      const isToday = dateStr === today;
+                      const tomorrow = new Date();
+                      tomorrow.setDate(tomorrow.getDate() + 1);
+                      const isTomorrow = dateStr === formatDateString(tomorrow);
+
+                      return (
+                        <button
+                          key={dateStr}
+                          onClick={() => setPrepDate(dateStr)}
+                          className="w-full text-left bg-gray-800 rounded-lg p-4 border border-gray-700 hover:border-purple-500 transition-colors"
+                        >
+                          <div className="flex justify-between items-start mb-2">
+                            <div>
+                              <p className="text-white font-bold text-lg">
+                                {isToday ? 'Today' : isTomorrow ? 'Tomorrow' : displayDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                              </p>
+                              <p className="text-gray-500 text-xs">
+                                {!isToday && !isTomorrow && displayDate.toLocaleDateString('en-US', { weekday: 'long' })}
+                              </p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-amber-400 font-semibold">{formatPrice(totalRevenue)}</p>
+                            </div>
                           </div>
-                        ))}
-                      </div>
-                    )}
+                          <div className="flex items-center gap-4 text-sm text-gray-400">
+                            <span>{dateOrders.length} order{dateOrders.length !== 1 ? 's' : ''}</span>
+                            <span>{totalItems} item{totalItems !== 1 ? 's' : ''}</span>
+                            {needsAction > 0 && (
+                              <span className="text-yellow-400">{needsAction} needs confirmation</span>
+                            )}
+                          </div>
+                          {/* Quick item preview */}
+                          <div className="mt-2 flex flex-wrap gap-1">
+                            {(() => {
+                              const itemCounts = {};
+                              dateOrders.forEach(o => (o.items || []).forEach(i => {
+                                itemCounts[i.emoji] = (itemCounts[i.emoji] || 0) + i.quantity;
+                              }));
+                              return Object.entries(itemCounts).slice(0, 6).map(([emoji, qty]) => (
+                                <span key={emoji} className="text-xs bg-gray-700 rounded-full px-2 py-0.5 text-gray-300">
+                                  {emoji} x{qty}
+                                </span>
+                              ));
+                            })()}
+                          </div>
+                        </button>
+                      );
+                    })}
                   </div>
+                );
+              })()
+            ) : (
+              /* Baking list drill-in for selected date */
+              (() => {
+                const prepOrders = orders.filter(o => o.requested_date === prepDate);
+                const displayDate = new Date(prepDate + 'T12:00:00');
+                const itemMap = {};
+                prepOrders.forEach(order => {
+                  (order.items || []).forEach(item => {
+                    const key = `${item.name}|${item.selectedOption || ''}`;
+                    if (!itemMap[key]) {
+                      itemMap[key] = { emoji: item.emoji, name: item.name, option: item.selectedOption || '', quantity: 0 };
+                    }
+                    itemMap[key].quantity += item.quantity;
+                  });
+                });
+                const bakingList = Object.values(itemMap).sort((a, b) => b.quantity - a.quantity);
 
-                  {/* Individual orders */}
-                  {prepOrders.length > 0 && (
-                    <div className="space-y-3">
-                      {prepOrders.map(order => (
-                        <OrderCard
-                          key={order.id}
-                          order={order}
-                          formatPrice={formatPrice}
-                          formatFulfillmentType={formatFulfillmentType}
-                          getOrderStatusColor={getOrderStatusColor}
-                          getOrderStatusText={getOrderStatusText}
-                          onAdvanceStatus={advanceOrderStatus}
-                          toggleOrderPaid={toggleOrderPaid}
-                          deleteOrder={deleteOrder}
-                        />
-                      ))}
+                return (
+                  <>
+                    <div className="no-print flex items-center gap-3 mb-4">
+                      <button
+                        onClick={() => setPrepDate('')}
+                        className="text-purple-400 hover:text-purple-300 text-sm"
+                      >
+                        ← Back
+                      </button>
+                      <h2 className="text-white font-bold text-lg">
+                        {displayDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+                      </h2>
                     </div>
-                  )}
-                </>
-              );
-            })()}
+
+                    {/* Aggregated baking list */}
+                    <div className="bg-gray-800 rounded-lg p-4 shadow-lg border border-gray-700 mb-4">
+                      <div className="flex justify-between items-center mb-3">
+                        <h3 className="font-bold text-white text-xl">
+                          Baking List - {prepOrders.length} order{prepOrders.length !== 1 ? 's' : ''}
+                        </h3>
+                        <button
+                          onClick={() => window.print()}
+                          className="no-print text-sm bg-gray-700 hover:bg-gray-600 text-gray-300 px-3 py-1 rounded"
+                        >
+                          🖨️ Print
+                        </button>
+                      </div>
+                      {bakingList.length === 0 ? (
+                        <p className="text-gray-500 text-sm">No orders for this date.</p>
+                      ) : (
+                        <div className="space-y-2">
+                          {bakingList.map((row, idx) => (
+                            <div key={idx} className="flex items-center gap-3 text-gray-200 py-1 border-b border-gray-700 last:border-0">
+                              <span className="text-xl">{row.emoji}</span>
+                              <span className="flex-1">
+                                {row.name}
+                                {row.option && <span className="text-purple-400 text-sm ml-1">({row.option})</span>}
+                              </span>
+                              <span className="font-bold text-white text-lg">x {row.quantity}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Individual orders */}
+                    {prepOrders.length > 0 && (
+                      <>
+                        <h3 className="font-bold text-white mb-3">Individual Orders</h3>
+                        <div className="space-y-3">
+                          {prepOrders.map(order => (
+                            <OrderCard
+                              key={order.id}
+                              order={order}
+                              formatPrice={formatPrice}
+                              formatFulfillmentType={formatFulfillmentType}
+                              getOrderStatusColor={getOrderStatusColor}
+                              getOrderStatusText={getOrderStatusText}
+                              onAdvanceStatus={advanceOrderStatus}
+                              toggleOrderPaid={toggleOrderPaid}
+                              deleteOrder={deleteOrder}
+                            />
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </>
+                );
+              })()
+            )}
           </div>
         )}
 
