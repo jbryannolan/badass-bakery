@@ -1,3 +1,43 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* View transition animation */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.2s ease-out;
+}
+
+/* Print styles for admin prep view */
+@media print {
+  header, footer, .no-print {
+    display: none !important;
+  }
+  body {
+    background: white !important;
+    color: black !important;
+  }
+  .bg-gray-900, .bg-gray-800, .bg-gray-700 {
+    background: white !important;
+    border: 1px solid #ccc !important;
+  }
+  .text-white, .text-gray-200, .text-gray-300 {
+    color: black !important;
+  }
+  .text-gray-400, .text-gray-500, .text-purple-400, .text-purple-300, .text-amber-400 {
+    color: #444 !important;
+  }
+  .border-gray-700, .border-gray-600 {
+    border-color: #ccc !important;
+  }
+}

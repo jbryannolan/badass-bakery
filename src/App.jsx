@@ -2,6 +2,294 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from './supabase';
 import { sendOrderEmails } from './email';
 
+const STATUS_STEPS = ['placed', 'confirmed', 'baking', 'ready', 'complete'];
+const STATUS_CONFIG = {
+  placed: { label: 'Placed', color: 'bg-yellow-600', emoji: '📋' },
+  confirmed: { label: 'Confirmed', color: 'bg-blue-600', emoji: '✅' },
+  baking: { label: 'Baking', color: 'bg-orange-500', emoji: '🔥' },
+  ready: { label: 'Ready', color: 'bg-emerald-600', emoji: '🎉' },
+  complete: { label: 'Complete', color: 'bg-green-600', emoji: '✨' },
+};
+
+// Normalize legacy status values to the new lifecycle
+function normalizeStatus(order) {
+  if (order.status && STATUS_STEPS.includes(order.status)) return order.status;
+  if (order.status === 'pending') return 'placed';
+  // Fallback for old boolean-only orders
+  if (order.is_fulfilled && order.is_paid) return 'complete';
+  if (order.is_fulfilled) return 'ready';
+  return 'placed';
+}
+
+// Status Tracker for customer My Orders view
+function StatusTracker({ order }) {
+  const currentIdx = STATUS_STEPS.indexOf(normalizeStatus(order));
+  return (
+    <div className="mt-3">
+      <div className="flex items-center justify-between relative">
+        {/* Connecting line */}
+        <div className="absolute top-2 left-0 right-0 h-0.5 bg-gray-700" />
+        <div className="absolute top-2 left-0 h-0.5 bg-purple-500 transition-all" style={{ width: `${(currentIdx / (STATUS_STEPS.length - 1)) * 100}%` }} />
+        {STATUS_STEPS.map((step, i) => (
+          <div key={step} className="flex flex-col items-center relative z-10" style={{ width: '20%' }}>
+            <div className={`w-4 h-4 rounded-full border-2 transition-colors ${
+              i <= currentIdx ? 'bg-purple-500 border-purple-500' : 'bg-gray-800 border-gray-600'
+            }`} />
+            <span className={`text-xs mt-1 ${i <= currentIdx ? 'text-purple-400' : 'text-gray-600'}`}>
+              {STATUS_CONFIG[step].label}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Bottom Sheet Component
+function BottomSheet({ item, isOpen, onClose, onAddToCart, formatPrice }) {
+  const [selectedOption, setSelectedOption] = useState(item?.options?.[0] || null);
+  const [quantity, setQuantity] = useState(1);
+
+  useEffect(() => {
+    if (item) {
+      setSelectedOption(item.options?.[0] || null);
+      setQuantity(1);
+    }
+  }, [item]);
+
+  if (!item) return null;
+
+  const unitPrice = parseFloat(item.price) || 0;
+  const totalPrice = unitPrice * quantity;
+
+  return (
+    <>
+      {/* Backdrop */}
+      <div
+        className={`fixed inset-0 bg-black/60 z-50 transition-opacity duration-300 ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+        onClick={onClose}
+      />
+      {/* Panel */}
+      <div
+        className={`fixed bottom-0 left-0 right-0 z-50 bg-gray-800 rounded-t-2xl transition-transform duration-300 md:bottom-auto md:top-1/2 md:left-1/2 md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-2xl md:max-w-md md:inset-x-auto ${
+          isOpen ? 'translate-y-0 md:translate-y-[-50%]' : 'translate-y-full md:translate-y-[50%]'
+        }`}
+      >
+        {/* Drag handle */}
+        <div className="flex justify-center pt-3 pb-1 md:hidden">
+          <div className="w-10 h-1 rounded-full bg-gray-600" />
+        </div>
+
+        <div className="px-5 pt-2 pb-4" style={{ paddingBottom: 'env(safe-area-inset-bottom, 16px)' }}>
+          {/* Item header */}
+          <div className="text-center mb-4">
+            <span className="text-5xl">{item.emoji}</span>
+            <h3 className="text-xl font-bold text-white mt-2">{item.name}</h3>
+            {item.description && <p className="text-gray-400 text-sm mt-1">{item.description}</p>}
+            <p className="text-amber-400 font-medium mt-1">{formatPrice(item.price)}</p>
+          </div>
+
+          {/* Option chips */}
+          {item.options && item.options.length > 0 && (
+            <div className="flex flex-wrap gap-2 mb-4 justify-center">
+              {item.options.map(opt => (
+                <button
+                  key={opt}
+                  onClick={() => setSelectedOption(opt)}
+                  className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+                    selectedOption === opt
+                      ? 'bg-purple-600 text-white'
+                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                  }`}
+                >
+                  {opt}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Quantity stepper */}
+          <div className="flex items-center justify-center gap-6 mb-5">
+            <button
+              onClick={() => setQuantity(q => Math.max(1, q - 1))}
+              className="w-12 h-12 rounded-full bg-gray-700 hover:bg-gray-600 text-white text-xl font-bold flex items-center justify-center"
+            >
+              -
+            </button>
+            <span className="text-2xl font-bold text-white w-8 text-center">{quantity}</span>
+            <button
+              onClick={() => setQuantity(q => q + 1)}
+              className="w-12 h-12 rounded-full bg-gray-700 hover:bg-gray-600 text-white text-xl font-bold flex items-center justify-center"
+            >
+              +
+            </button>
+          </div>
+
+          {/* Add to cart button */}
+          <button
+            onClick={() => onAddToCart(item, selectedOption, quantity)}
+            className="w-full bg-purple-600 hover:bg-purple-500 text-white py-4 rounded-xl font-bold text-lg transition-colors"
+          >
+            Add to Cart - {formatPrice(totalPrice)}
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
+
+// Order Card Component
+function OrderCard({ order, formatPrice, formatFulfillmentType, getOrderStatusColor, getOrderStatusText, onAdvanceStatus, toggleOrderPaid, deleteOrder, expanded = false }) {
+  const status = normalizeStatus(order);
+  const currentIdx = STATUS_STEPS.indexOf(status);
+  const nextStatus = currentIdx < STATUS_STEPS.length - 1 ? STATUS_STEPS[currentIdx + 1] : null;
+  const prevStatus = currentIdx > 0 ? STATUS_STEPS[currentIdx - 1] : null;
+
+  return (
+    <div
+      className={`bg-gray-800 rounded-lg p-4 shadow border ${
+        status === 'complete' && order.is_paid
+          ? 'border-gray-700 opacity-60'
+          : 'border-purple-500'
+      }`}
+    >
+      <div className="flex justify-between items-start mb-2">
+        <div>
+          <span className="font-bold text-white">{order.customer_name}</span>
+          <span className="text-sm text-gray-500 ml-2">
+            {new Date(order.created_at).toLocaleString()}
+          </span>
+        </div>
+        <span className={`text-xs px-2 py-1 rounded text-white ${getOrderStatusColor(order)}`}>
+          {getOrderStatusText(order)}
+        </span>
+      </div>
+
+      {/* Order Details */}
+      <div className="text-sm text-gray-400 mb-2 space-y-1">
+        <div>📧 {order.customer_email}</div>
+        {order.customer_phone && <div>📞 {order.customer_phone}</div>}
+        {order.requested_date && (
+          <div>📅 Requested: {new Date(order.requested_date + 'T12:00:00').toLocaleDateString()}</div>
+        )}
+        <div>
+          {formatFulfillmentType(order.fulfillment_type)}
+          {order.delivery_address && `: ${order.delivery_address}`}
+        </div>
+      </div>
+
+      <ul className="text-sm mb-2 text-gray-300">
+        {(order.items || []).map((item, idx) => (
+          <li key={idx}>
+            {item.emoji} {item.name}
+            {item.selectedOption && <span className="text-purple-400"> ({item.selectedOption})</span>}
+            {' '} x {item.quantity}
+            <span className="text-gray-500 ml-2">{formatPrice(item.price * item.quantity)}</span>
+          </li>
+        ))}
+      </ul>
+
+      <div className="text-white font-medium mb-2">
+        Total: {formatPrice(order.total)}
+      </div>
+
+      {order.note && (
+        <p className="text-sm text-purple-300 italic mb-2">"{order.note}"</p>
+      )}
+
+      <div className="flex flex-wrap gap-2">
+        {/* Back button */}
+        {prevStatus && (
+          <button
+            onClick={() => onAdvanceStatus(order.id, 'back')}
+            className="text-sm px-3 py-1 rounded font-medium bg-gray-700 text-gray-300 hover:bg-gray-600"
+          >
+            ← {STATUS_CONFIG[prevStatus].label}
+          </button>
+        )}
+        {/* Forward / advance button */}
+        {nextStatus && (
+          <button
+            onClick={() => onAdvanceStatus(order.id, 'forward')}
+            className="text-sm px-3 py-1 rounded font-medium bg-purple-600 hover:bg-purple-500 text-white"
+          >
+            → {STATUS_CONFIG[nextStatus].label}
+          </button>
+        )}
+        <button
+          onClick={() => toggleOrderPaid(order.id)}
+          className={`text-sm px-3 py-1 rounded font-medium ${
+            order.is_paid
+              ? 'bg-green-700 text-white'
+              : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+          }`}
+        >
+          {order.is_paid ? '✓ Paid' : 'Mark Paid'}
+        </button>
+        <button
+          onClick={() => deleteOrder(order.id)}
+          className="text-sm bg-gray-700 hover:bg-gray-600 text-gray-300 px-3 py-1 rounded"
+        >
+          Delete
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// Admin Navigation Component
+function AdminNav({ activeView, onNavigate, orders }) {
+  const tabs = [
+    { view: 'admin', label: 'Items' },
+    { view: 'orders', label: `Orders (${orders.filter(o => normalizeStatus(o) !== 'complete').length})` },
+    { view: 'prep', label: 'Prep' },
+    { view: 'availability', label: 'Dates' },
+    { view: 'settings', label: 'Settings' },
+  ];
+  return (
+    <div className="flex gap-2 mb-6 no-print">
+      {tabs.map(tab => (
+        <button
+          key={tab.view}
+          onClick={() => onNavigate(tab.view)}
+          className={`flex-1 py-2 rounded-lg font-medium text-sm ${
+            activeView === tab.view ? 'bg-purple-600 text-white' : 'bg-gray-700 hover:bg-gray-600 text-white'
+          }`}
+        >
+          {tab.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// Menu Item Component
+function MenuItem({ item, onTapItem, formatPrice, isJustAdded }) {
+  return (
+    <div
+      onClick={() => onTapItem(item)}
+      className={`bg-gray-800 rounded-lg p-4 shadow-lg border transition-colors cursor-pointer ${
+        isJustAdded ? 'border-green-500' : 'border-gray-700 hover:border-purple-500'
+      }`}
+    >
+      <div className="flex items-start gap-3">
+        <span className="text-3xl flex-shrink-0">{item.emoji}</span>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h3 className="font-semibold text-white text-lg">{item.name}</h3>
+            <span className="text-amber-400 font-medium">{formatPrice(item.price)}</span>
+          </div>
+          <p className="text-sm text-gray-400 mt-0.5">{item.description}</p>
+        </div>
+
+        <div className="flex-shrink-0 w-10 h-10 rounded-full bg-purple-600 hover:bg-purple-500 text-white flex items-center justify-center text-xl font-bold transition-colors">
+          +
+        </div>
+      </div>
+    </div>
+  );
+}
+
 
 export default function App() {
   const [view, setView] = useState('menu');
@@ -27,8 +315,8 @@ export default function App() {
   const [tempDescription, setTempDescription] = useState('');
   const [calendarMonth, setCalendarMonth] = useState(new Date());
   const [orderCalendarMonth, setOrderCalendarMonth] = useState(new Date());
-  const [ordersViewMode, setOrdersViewMode] = useState('calendar'); // 'calendar' or 'list'
-  const [statusFilter, setStatusFilter] = useState('all'); // 'all', 'pending', 'fulfilled', 'paid', 'complete'
+  const [ordersViewMode, setOrdersViewMode] = useState('calendar');
+  const [statusFilter, setStatusFilter] = useState('all');
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [adminEmail, setAdminEmail] = useState('');
   const [tempAdminEmail, setTempAdminEmail] = useState('');
@@ -46,7 +334,7 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState(null);
   const [userProfile, setUserProfile] = useState(null);
   const [authEmail, setAuthEmail] = useState('');
-  const [authMode, setAuthMode] = useState('signin'); // 'signin' | 'signup'
+  const [authMode, setAuthMode] = useState('signin');
   const [authPassword, setAuthPassword] = useState('');
   const [authLoading, setAuthLoading] = useState(false);
   const [authMessage, setAuthMessage] = useState('');
@@ -55,9 +343,22 @@ export default function App() {
   const [profilePhone, setProfilePhone] = useState('');
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileSaved, setProfileSaved] = useState(false);
+  const [myOrdersLoading, setMyOrdersLoading] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [newPasswordSaving, setNewPasswordSaving] = useState(false);
   const [newPasswordMessage, setNewPasswordMessage] = useState('');
+
+  // Feature 2: Bottom Sheet + Tappable Chips
+  const [bottomSheetItem, setBottomSheetItem] = useState(null);
+  const [justAdded, setJustAdded] = useState(null);
+
+  // Feature 3: Admin Baking Prep View
+  const [prepDate, setPrepDate] = useState('');
+
+  // Feature 4: PWA Install Prompt
+  const [deferredPrompt, setDeferredPrompt] = useState(null);
+  const [showInstallBanner, setShowInstallBanner] = useState(false);
+  const [isIOS, setIsIOS] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -76,6 +377,20 @@ export default function App() {
     return () => {
       authSubscription.unsubscribe();
     };
+  }, []);
+
+  // Feature 4: PWA install prompt effect
+  useEffect(() => {
+    const standalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+    if (standalone || localStorage.getItem('install-dismissed')) return;
+
+    const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    setIsIOS(ios);
+    if (ios) { setShowInstallBanner(true); return; }
+
+    const handler = (e) => { e.preventDefault(); setDeferredPrompt(e); setShowInstallBanner(true); };
+    window.addEventListener('beforeinstallprompt', handler);
+    return () => window.removeEventListener('beforeinstallprompt', handler);
   }, []);
 
   const loadData = async (retryCount = 0) => {
@@ -122,11 +437,11 @@ export default function App() {
       .select('*')
       .eq('key', 'blocked_dates')
       .single();
-    
+
     if (error && error.code !== 'PGRST116') {
       console.error('Error loading blocked dates:', error);
     }
-    
+
     if (data?.value) {
       setBlockedDates(data.value);
     }
@@ -138,11 +453,11 @@ export default function App() {
       .select('*')
       .eq('key', 'admin_email')
       .single();
-    
+
     if (error && error.code !== 'PGRST116') {
       console.error('Error loading admin email:', error);
     }
-    
+
     if (data?.value) {
       const email = typeof data.value === 'string' ? data.value.replace(/^"|"$/g, '') : data.value;
       setAdminEmail(email);
@@ -221,8 +536,10 @@ export default function App() {
   };
 
   const loadMyOrders = async (email) => {
+    setMyOrdersLoading(true);
     const { data } = await supabase.from('orders').select('*').eq('customer_email', email).order('created_at', { ascending: false });
     setMyOrders(data || []);
+    setMyOrdersLoading(false);
   };
 
   const handleAuth = async () => {
@@ -235,12 +552,10 @@ export default function App() {
       setAuthLoading(false);
       if (error) setAuthMessage('Error: ' + error.message);
       else if (data?.user && !data.session) setAuthMessage('Account created! Check your email to confirm, then sign in.');
-      // If session exists, onAuthStateChange will redirect to menu
     } else {
       const { error } = await supabase.auth.signInWithPassword({ email: authEmail, password: authPassword });
       setAuthLoading(false);
       if (error) setAuthMessage('Error: ' + error.message);
-      // onAuthStateChange will redirect to menu on success
     }
   };
 
@@ -277,12 +592,12 @@ export default function App() {
     const { error } = await supabase
       .from('settings')
       .upsert({ key: 'admin_email', value: email });
-    
+
     if (error) {
       console.error('Error saving admin email:', error);
       return;
     }
-    
+
     setAdminEmail(email);
     setAdminEmailSaved(true);
     setTimeout(() => setAdminEmailSaved(false), 2000);
@@ -295,7 +610,7 @@ export default function App() {
     } else {
       newBlockedDates = [...blockedDates, dateString];
     }
-    
+
     const { error } = await supabase
       .from('settings')
       .upsert({ key: 'blocked_dates', value: newBlockedDates }, { onConflict: 'key' });
@@ -362,7 +677,8 @@ export default function App() {
       items: orderItems,
       total: getCartTotal(),
       note: orderNote.trim() || null,
-      status: 'pending',
+      status: 'placed',
+      status_history: [{ status: 'placed', timestamp: new Date().toISOString() }],
       is_fulfilled: false,
       is_paid: false
     };
@@ -402,6 +718,56 @@ export default function App() {
     setView('confirmation');
   };
 
+  // Feature 1: Advance order status lifecycle
+  const advanceOrderStatus = async (orderId, direction = 'forward') => {
+    const order = orders.find(o => o.id === orderId);
+    if (!order) return;
+    const currentStatus = normalizeStatus(order);
+    const currentIdx = STATUS_STEPS.indexOf(currentStatus);
+    const nextIdx = direction === 'forward'
+      ? Math.min(currentIdx + 1, STATUS_STEPS.length - 1)
+      : Math.max(currentIdx - 1, 0);
+    const nextStatus = STATUS_STEPS[nextIdx];
+    if (nextStatus === currentStatus) return;
+
+    const history = Array.isArray(order.status_history) ? [...order.status_history] : [];
+    history.push({ status: nextStatus, timestamp: new Date().toISOString() });
+
+    const { error } = await supabase
+      .from('orders')
+      .update({
+        status: nextStatus,
+        status_history: history,
+        is_fulfilled: ['ready', 'complete'].includes(nextStatus)
+      })
+      .eq('id', orderId);
+
+    if (error) {
+      console.error('Error advancing order status:', error);
+      return;
+    }
+    const fresh = await loadOrders();
+    if (selectedOrder?.id === orderId) {
+      setSelectedOrder(fresh.find(o => o.id === orderId) || null);
+    }
+  };
+
+  const toggleOrderPaid = async (orderId) => {
+    const order = orders.find(o => o.id === orderId);
+    const { error } = await supabase
+      .from('orders')
+      .update({ is_paid: !order.is_paid })
+      .eq('id', orderId);
+
+    if (error) {
+      console.error('Error updating order:', error);
+      return;
+    }
+    const fresh = await loadOrders();
+    if (selectedOrder?.id === orderId) {
+      setSelectedOrder(fresh.find(o => o.id === orderId) || null);
+    }
+  };
 
   const toggleItemStock = async (itemId) => {
     const item = items.find(i => i.id === itemId);
@@ -503,40 +869,6 @@ export default function App() {
     setItems(prev => prev.filter(i => i.id !== itemId));
   };
 
-  const toggleOrderFulfilled = async (orderId) => {
-    const order = orders.find(o => o.id === orderId);
-    const { error } = await supabase
-      .from('orders')
-      .update({ is_fulfilled: !order.is_fulfilled })
-      .eq('id', orderId);
-
-    if (error) {
-      console.error('Error updating order:', error);
-      return;
-    }
-    const fresh = await loadOrders();
-    if (selectedOrder?.id === orderId) {
-      setSelectedOrder(fresh.find(o => o.id === orderId) || null);
-    }
-  };
-
-  const toggleOrderPaid = async (orderId) => {
-    const order = orders.find(o => o.id === orderId);
-    const { error } = await supabase
-      .from('orders')
-      .update({ is_paid: !order.is_paid })
-      .eq('id', orderId);
-
-    if (error) {
-      console.error('Error updating order:', error);
-      return;
-    }
-    const fresh = await loadOrders();
-    if (selectedOrder?.id === orderId) {
-      setSelectedOrder(fresh.find(o => o.id === orderId) || null);
-    }
-  };
-
   const deleteOrder = async (orderId) => {
     if (!window.confirm('Delete this order? This cannot be undone.')) return;
     const { error } = await supabase
@@ -578,19 +910,17 @@ export default function App() {
     const lastDay = new Date(year, month + 1, 0);
     const daysInMonth = lastDay.getDate();
     const startingDay = firstDay.getDay();
-    
+
     const days = [];
-    
-    // Empty cells for days before the 1st
+
     for (let i = 0; i < startingDay; i++) {
       days.push(null);
     }
-    
-    // Days of the month
+
     for (let i = 1; i <= daysInMonth; i++) {
       days.push(new Date(year, month, i));
     }
-    
+
     return days;
   };
 
@@ -612,34 +942,33 @@ export default function App() {
   // Filter orders based on status
   const getFilteredOrders = () => {
     return orders.filter(order => {
-      switch (statusFilter) {
-        case 'pending':
-          return !order.is_fulfilled && !order.is_paid;
-        case 'fulfilled':
-          return order.is_fulfilled && !order.is_paid;
-        case 'paid':
-          return order.is_paid && !order.is_fulfilled;
-        case 'complete':
-          return order.is_fulfilled && order.is_paid;
-        default:
-          return true;
-      }
+      if (statusFilter === 'all') return true;
+      const s = normalizeStatus(order);
+      return s === statusFilter;
     });
   };
 
   // Get order status color
   const getOrderStatusColor = (order) => {
-    if (order.is_fulfilled && order.is_paid) return 'bg-green-600';
-    if (order.is_fulfilled) return 'bg-blue-600';
-    if (order.is_paid) return 'bg-emerald-600';
-    return 'bg-yellow-600';
+    const s = normalizeStatus(order);
+    return STATUS_CONFIG[s]?.color || 'bg-yellow-600';
   };
 
   const getOrderStatusText = (order) => {
-    if (order.is_fulfilled && order.is_paid) return 'Complete';
-    if (order.is_fulfilled) return 'Fulfilled';
-    if (order.is_paid) return 'Paid';
-    return 'Pending';
+    const s = normalizeStatus(order);
+    return STATUS_CONFIG[s]?.label || 'Placed';
+  };
+
+  // Feature 3: Prep view helper - find next date with orders
+  const getNextPrepDate = () => {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowStr = formatDateString(tomorrow);
+    const futureDates = orders
+      .map(o => o.requested_date)
+      .filter(d => d && d >= tomorrowStr)
+      .sort();
+    return futureDates.length > 0 ? futureDates[0] : tomorrowStr;
   };
 
   if (loading) {
@@ -655,7 +984,7 @@ export default function App() {
       <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4">
         <div className="bg-red-900 text-red-200 p-4 rounded-lg max-w-md text-center">
           <p className="mb-4">{error}</p>
-          <button 
+          <button
             onClick={loadData}
             className="bg-red-700 hover:bg-red-600 px-4 py-2 rounded"
           >
@@ -671,13 +1000,13 @@ export default function App() {
       {/* Header */}
       <header className="bg-black/95 backdrop-blur-sm text-white shadow-lg border-b border-gray-800 sticky top-0 z-40" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
         <div className="max-w-4xl mx-auto flex justify-between items-center px-4 py-3">
-          <div 
-            className="flex items-center gap-3 cursor-pointer" 
+          <div
+            className="flex items-center gap-3 cursor-pointer"
             onClick={() => { setView('menu'); setIsAdmin(false); }}
           >
             <img src="/logo-light.png" alt="Badass Bakery" className="h-12 w-12 object-contain" />
             <h1 className="text-xl sm:text-2xl font-bold tracking-wide">
-              <span className="text-purple-400">BADASS</span> BAKERY
+              <span className="text-purple-400 tracking-wider">BADASS</span> BAKERY
             </h1>
           </div>
           <div className="flex items-center gap-3">
@@ -692,7 +1021,7 @@ export default function App() {
             {!isAdmin && (
               currentUser
                 ? <div className="flex items-center gap-2">
-                    <button onClick={() => setView('my-orders')} className="text-purple-400 text-sm hover:text-purple-300">
+                    <button onClick={() => { setView('my-orders'); loadMyOrders(currentUser.email); }} className="text-purple-400 text-sm hover:text-purple-300">
                       {userProfile?.name ? userProfile.name.split(' ')[0] : currentUser.email.split('@')[0]}
                     </button>
                     <button onClick={handleSignOut} className="text-gray-400 text-xs hover:text-white">Sign out</button>
@@ -722,15 +1051,34 @@ export default function App() {
       <main className="max-w-4xl mx-auto px-4 py-4 pb-8" style={{ paddingBottom: 'max(2rem, env(safe-area-inset-bottom, 0px))' }}>
         {/* Menu View */}
         {view === 'menu' && (
-          <div className="max-w-2xl mx-auto">
+          <div className="max-w-2xl mx-auto animate-fadeIn">
             {menuHeadline && (
-              <p className="text-purple-300 mb-2 text-center text-lg">{menuHeadline}</p>
+              <p className="text-purple-300 mb-2 text-center text-xl">{menuHeadline}</p>
             )}
             {menuSubline && (
               <p className="text-gray-500 mb-6 text-center text-sm">{menuSubline}</p>
             )}
             {!menuHeadline && !menuSubline && <div className="mb-6" />}
-            
+
+            {/* Feature 4: PWA Install Banner */}
+            {showInstallBanner && (
+              <div className="bg-purple-900/80 border border-purple-700 rounded-xl p-3 mb-4 flex items-center gap-3">
+                <span className="text-2xl">📱</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-white text-sm font-medium">Add to Home Screen</p>
+                  <p className="text-purple-300 text-xs">{isIOS ? 'Tap Share then "Add to Home Screen"' : 'Get the full app experience'}</p>
+                </div>
+                {!isIOS && deferredPrompt && (
+                  <button onClick={async () => { deferredPrompt.prompt(); const { outcome } = await deferredPrompt.userChoice; if (outcome === 'accepted') setShowInstallBanner(false); setDeferredPrompt(null); }}
+                    className="bg-purple-600 hover:bg-purple-500 text-white px-3 py-1.5 rounded-lg text-sm font-medium flex-shrink-0">
+                    Install
+                  </button>
+                )}
+                <button onClick={() => { setShowInstallBanner(false); localStorage.setItem('install-dismissed', 'true'); }}
+                  className="text-purple-400 hover:text-white flex-shrink-0 text-lg leading-none">x</button>
+              </div>
+            )}
+
             {!isOpen ? (
               <div className="text-center py-12">
                 <div className="text-5xl mb-4">🔒</div>
@@ -739,17 +1087,23 @@ export default function App() {
               </div>
             ) : (
               <>
+                <p className="text-xs uppercase tracking-widest text-gray-500 mb-3 text-center">Our Menu</p>
                 <div className="space-y-3 mb-6">
                   {items.filter(i => i.in_stock).map(item => (
                     <MenuItem
                       key={item.id}
                       item={item}
-                      onAddToCart={addToCart}
+                      onTapItem={(item) => setBottomSheetItem(item)}
                       formatPrice={formatPrice}
+                      isJustAdded={justAdded === item.id}
                     />
                   ))}
                   {items.filter(i => i.in_stock).length === 0 && (
-                    <p className="text-center text-gray-500 py-8">Nothing available right now - check back soon!</p>
+                    <div className="text-center py-12">
+                      <div className="text-5xl mb-3">🍪</div>
+                      <p className="text-white font-medium mb-1">Nothing in the oven yet</p>
+                      <p className="text-gray-500 text-sm">Check back soon for fresh goodies!</p>
+                    </div>
                   )}
                 </div>
 
@@ -761,21 +1115,21 @@ export default function App() {
 
         {/* Cart View */}
         {view === 'cart' && (
-          <div className="max-w-2xl mx-auto">
+          <div className="max-w-2xl mx-auto animate-fadeIn">
             <button
               onClick={() => setView('menu')}
               className="text-purple-400 hover:text-purple-300 mb-4 flex items-center gap-1"
             >
               ← Back to Menu
             </button>
-            
+
             <div className="bg-gray-800 rounded-lg p-4 shadow-lg border-2 border-purple-500 mb-4">
-              <h2 className="font-bold text-white mb-3 text-lg">🛒 Your Cart</h2>
+              <h2 className="font-bold text-white mb-3 text-xl">🛒 Your Cart</h2>
               <div className="space-y-2 mb-4">
                 {cart.map(item => (
                   <div key={item.cartKey} className="flex justify-between items-center text-gray-200 py-2 border-b border-gray-700">
                     <div className="flex-1">
-                      <span>{item.emoji} {item.name}</span>
+                      <span className="text-xl">{item.emoji}</span> <span>{item.name}</span>
                       {item.selectedOption && (
                         <span className="text-purple-400 text-sm ml-2">({item.selectedOption})</span>
                       )}
@@ -795,7 +1149,7 @@ export default function App() {
                       >
                         +
                       </button>
-                      <span className="w-20 text-right text-purple-300">{formatPrice(item.price * item.quantity)}</span>
+                      <span className="w-20 text-right text-amber-400">{formatPrice(item.price * item.quantity)}</span>
                       <button
                         onClick={() => removeFromCart(item.cartKey)}
                         className="ml-2 text-red-400 hover:text-red-300"
@@ -806,17 +1160,27 @@ export default function App() {
                   </div>
                 ))}
               </div>
-              
-              <div className="flex justify-between items-center text-white font-bold text-lg border-t border-gray-600 pt-3">
+
+              {/* Empty Cart button */}
+              <div className="text-center mb-3">
+                <button
+                  onClick={() => setCart([])}
+                  className="text-gray-500 hover:text-gray-300 text-sm"
+                >
+                  Empty Cart
+                </button>
+              </div>
+
+              <div className="flex justify-between items-center text-white font-bold text-xl border-t border-gray-600 pt-3">
                 <span>Total</span>
-                <span className="text-purple-300">{formatPrice(getCartTotal())}</span>
+                <span className="text-amber-400">{formatPrice(getCartTotal())}</span>
               </div>
             </div>
 
             {/* Order Details Form */}
             <div className="bg-gray-800 rounded-lg p-4 shadow-lg border border-gray-700">
-              <h3 className="font-bold text-white mb-3">Order Details</h3>
-              
+              <h3 className="font-bold text-white mb-3 text-xl">Order Details</h3>
+
               <input
                 type="text"
                 placeholder="Your name *"
@@ -824,7 +1188,7 @@ export default function App() {
                 onChange={(e) => setCustomerName(e.target.value)}
                 className="w-full bg-gray-700 border border-gray-600 rounded p-2 mb-3 text-white placeholder-gray-400 focus:border-purple-500 focus:outline-none"
               />
-              
+
               <input
                 type="email"
                 placeholder="Email address *"
@@ -867,7 +1231,7 @@ export default function App() {
                   <p className="text-gray-500 text-xs mt-1">Some dates may be unavailable</p>
                 )}
               </div>
-              
+
               <div className="mb-3">
                 <label className="text-gray-400 text-sm mb-1 block">How do you want to get it?</label>
                 <div className="grid grid-cols-3 gap-2">
@@ -903,7 +1267,7 @@ export default function App() {
                   </button>
                 </div>
               </div>
-              
+
               {fulfillmentType === 'delivery' && (
                 <input
                   type="text"
@@ -913,20 +1277,20 @@ export default function App() {
                   className="w-full bg-gray-700 border border-gray-600 rounded p-2 mb-3 text-white placeholder-gray-400 focus:border-purple-500 focus:outline-none"
                 />
               )}
-              
+
               <textarea
                 placeholder="Any notes? (optional)"
                 value={orderNote}
                 onChange={(e) => setOrderNote(e.target.value)}
                 className="w-full bg-gray-700 border border-gray-600 rounded p-2 mb-3 h-20 text-white placeholder-gray-400 focus:border-purple-500 focus:outline-none"
               />
-              
+
               <button
                 onClick={submitOrder}
                 disabled={!customerName.trim() || !customerEmail.trim() || cart.length === 0 || !requestedDate || submitting}
                 className="w-full bg-purple-600 hover:bg-purple-500 disabled:bg-gray-600 disabled:text-gray-400 text-white py-3 rounded-lg font-bold transition-colors"
               >
-                {submitting ? 'Placing Order...' : `Place Order — ${formatPrice(getCartTotal())}`}
+                {submitting ? 'Placing Order...' : `Place Order - ${formatPrice(getCartTotal())}`}
               </button>
             </div>
           </div>
@@ -934,7 +1298,7 @@ export default function App() {
 
         {/* Order Confirmation */}
         {view === 'confirmation' && (
-          <div className="max-w-2xl mx-auto">
+          <div className="max-w-2xl mx-auto animate-fadeIn">
             <div className="bg-gray-800 rounded-lg p-8 shadow-lg border border-purple-500 text-center">
               <div className="text-5xl mb-4">🎉</div>
               <h2 className="text-2xl font-bold text-white mb-2">Hell Yeah!</h2>
@@ -950,10 +1314,19 @@ export default function App() {
                   </p>
                   <ul className="mb-2 text-gray-300">
                     {lastOrder.items.map((item, idx) => (
-                      <li key={idx}>{item.emoji} {item.name}{item.selectedOption && <span className="text-purple-400"> ({item.selectedOption})</span>} × {item.quantity}</li>
+                      <li key={idx}>{item.emoji} {item.name}{item.selectedOption && <span className="text-purple-400"> ({item.selectedOption})</span>} x {item.quantity}</li>
                     ))}
                   </ul>
-                  <p className="text-white font-medium">Total: {formatPrice(lastOrder.total)}</p>
+                  <p className="text-white font-medium">Total: <span className="text-amber-400">{formatPrice(lastOrder.total)}</span></p>
+
+                  {/* What happens next */}
+                  <div className="text-left text-sm text-gray-400 space-y-2 mt-4 pt-4 border-t border-gray-700">
+                    <p className="text-white font-medium text-base mb-2">What happens next?</p>
+                    <p>1. Theresa will confirm your order</p>
+                    <p>2. She'll bake everything fresh</p>
+                    <p>3. You'll get a heads up when it's ready</p>
+                    {currentUser && <p className="text-purple-400 mt-2">Track your order status in My Account.</p>}
+                  </div>
                 </div>
               )}
               <button
@@ -968,7 +1341,7 @@ export default function App() {
 
         {/* Customer Sign In */}
         {view === 'customer-login' && (
-          <div className="max-w-sm mx-auto mt-12 bg-gray-800 rounded-lg p-6 border border-gray-700">
+          <div className="max-w-sm mx-auto mt-12 bg-gray-800 rounded-lg p-6 border border-gray-700 animate-fadeIn">
             <h2 className="text-xl font-bold text-white mb-1">{authMode === 'signup' ? 'Create Account' : 'Sign In'}</h2>
             <p className="text-gray-400 text-sm mb-4">Save your info and see order history.</p>
 
@@ -1019,7 +1392,7 @@ export default function App() {
 
         {/* My Orders / Account */}
         {view === 'my-orders' && currentUser && (
-          <div className="max-w-lg mx-auto">
+          <div className="max-w-lg mx-auto animate-fadeIn">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-bold text-white">My Account</h2>
               <button onClick={() => setView('menu')} className="text-gray-400 text-sm hover:text-white">← Menu</button>
@@ -1063,9 +1436,24 @@ export default function App() {
             </div>
 
             {/* Order history */}
-            <h3 className="font-bold text-white mb-3">Order History</h3>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-bold text-white text-xl">Order History</h3>
+              <button
+                onClick={() => loadMyOrders(currentUser.email)}
+                disabled={myOrdersLoading}
+                className="text-gray-400 hover:text-white text-sm disabled:opacity-50"
+              >
+                {myOrdersLoading ? 'Refreshing...' : '🔄 Refresh'}
+              </button>
+            </div>
             {myOrders.length === 0
-              ? <p className="text-gray-400 text-sm">No orders yet.</p>
+              ? (
+                <div className="text-center py-12">
+                  <div className="text-5xl mb-3">📦</div>
+                  <p className="text-white font-medium mb-1">No orders yet</p>
+                  <p className="text-gray-500 text-sm">Your order history will show up here.</p>
+                </div>
+              )
               : myOrders.map(order => (
                   <div key={order.id} className="bg-gray-800 rounded-lg p-4 border border-gray-700 mb-3">
                     <div className="flex justify-between items-start mb-2">
@@ -1078,11 +1466,8 @@ export default function App() {
                         <p className="text-gray-400 text-xs">Ordered {new Date(order.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</p>
                       </div>
                       <div className="text-right">
-                        <p className="text-purple-400 font-medium text-sm">{formatPrice(order.total)}</p>
+                        <p className="text-amber-400 font-medium text-sm">{formatPrice(order.total)}</p>
                         <div className="flex gap-1 mt-1 justify-end">
-                          <span className={`text-xs px-2 py-0.5 rounded-full ${order.is_fulfilled ? 'bg-green-900 text-green-300' : 'bg-yellow-900 text-yellow-300'}`}>
-                            {order.is_fulfilled ? 'Fulfilled' : 'Pending'}
-                          </span>
                           <span className={`text-xs px-2 py-0.5 rounded-full ${order.is_paid ? 'bg-green-900 text-green-300' : 'bg-orange-900 text-orange-300'}`}>
                             {order.is_paid ? 'Paid' : 'Unpaid'}
                           </span>
@@ -1091,9 +1476,10 @@ export default function App() {
                     </div>
                     <ul className="text-gray-300 text-sm">
                       {(order.items || []).map((item, idx) => (
-                        <li key={idx}>{item.emoji} {item.name}{item.selectedOption && <span className="text-purple-400"> ({item.selectedOption})</span>} × {item.quantity}</li>
+                        <li key={idx}>{item.emoji} {item.name}{item.selectedOption && <span className="text-purple-400"> ({item.selectedOption})</span>} x {item.quantity}</li>
                       ))}
                     </ul>
+                    <StatusTracker order={order} />
                   </div>
                 ))
             }
@@ -1102,8 +1488,8 @@ export default function App() {
 
         {/* Admin View */}
         {view === 'admin' && isAdmin && (
-          <div>
-            <AdminNav activeView={view} onNavigate={setView} orders={orders} />
+          <div className="animate-fadeIn">
+            <AdminNav activeView={view} onNavigate={(v) => { if (v === 'prep' && !prepDate) setPrepDate(getNextPrepDate()); setView(v); }} orders={orders} />
 
             {/* Add New Item */}
             <div className="bg-gray-800 rounded-lg p-4 shadow-lg border border-gray-700 mb-4">
@@ -1160,8 +1546,8 @@ export default function App() {
             {/* Item List */}
             <div className="space-y-2">
               {items.map(item => (
-                <div 
-                  key={item.id} 
+                <div
+                  key={item.id}
                   className="bg-gray-800 rounded-lg p-3 shadow border border-gray-700"
                 >
                   <div className="flex justify-between items-center mb-2">
@@ -1176,8 +1562,8 @@ export default function App() {
                       <button
                         onClick={() => toggleItemStock(item.id)}
                         className={`px-3 py-1 rounded text-sm font-medium ${
-                          item.in_stock 
-                            ? 'bg-red-900 text-red-300 hover:bg-red-800' 
+                          item.in_stock
+                            ? 'bg-red-900 text-red-300 hover:bg-red-800'
                             : 'bg-green-900 text-green-300 hover:bg-green-800'
                         }`}
                       >
@@ -1191,7 +1577,7 @@ export default function App() {
                       </button>
                     </div>
                   </div>
-                  
+
                   {/* Description editing */}
                   <div className="flex items-center gap-2 mb-2">
                     <span className="text-gray-400 text-sm w-16">Desc:</span>
@@ -1219,9 +1605,9 @@ export default function App() {
                       </div>
                     ) : (
                       <button
-                        onClick={() => { 
-                          setEditingDescription(item.id); 
-                          setTempDescription(item.description || ''); 
+                        onClick={() => {
+                          setEditingDescription(item.id);
+                          setTempDescription(item.description || '');
                         }}
                         className="text-purple-300 hover:text-purple-200 text-sm text-left"
                       >
@@ -1229,7 +1615,7 @@ export default function App() {
                       </button>
                     )}
                   </div>
-                  
+
                   {/* Price editing */}
                   <div className="flex items-center gap-2 mb-2">
                     <span className="text-gray-400 text-sm w-16">Price:</span>
@@ -1264,7 +1650,7 @@ export default function App() {
                       </button>
                     )}
                   </div>
-                  
+
                   {/* Options editing */}
                   <div className="flex items-center gap-2">
                     <span className="text-gray-400 text-sm w-16">Options:</span>
@@ -1292,9 +1678,9 @@ export default function App() {
                       </div>
                     ) : (
                       <button
-                        onClick={() => { 
-                          setEditingOptions(item.id); 
-                          setTempOptions(item.options?.join(', ') || ''); 
+                        onClick={() => {
+                          setEditingOptions(item.id);
+                          setTempOptions(item.options?.join(', ') || '');
                         }}
                         className="text-purple-300 hover:text-purple-200 text-sm"
                       >
@@ -1310,8 +1696,8 @@ export default function App() {
 
         {/* Availability Calendar View */}
         {view === 'availability' && isAdmin && (
-          <div>
-            <AdminNav activeView={view} onNavigate={setView} orders={orders} />
+          <div className="animate-fadeIn">
+            <AdminNav activeView={view} onNavigate={(v) => { if (v === 'prep' && !prepDate) setPrepDate(getNextPrepDate()); setView(v); }} orders={orders} />
 
             <div className="bg-gray-800 rounded-lg p-4 shadow-lg border border-gray-700">
               <div className="flex justify-between items-center mb-4">
@@ -1331,11 +1717,11 @@ export default function App() {
                   Next →
                 </button>
               </div>
-              
+
               <p className="text-gray-400 text-sm mb-4 text-center">
                 Click a date to block/unblock it. Blocked dates will show as unavailable to customers.
               </p>
-              
+
               <div className="grid grid-cols-7 gap-1 mb-2">
                 {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
                   <div key={day} className="text-center text-gray-500 text-xs py-2">
@@ -1343,18 +1729,18 @@ export default function App() {
                   </div>
                 ))}
               </div>
-              
+
               <div className="grid grid-cols-7 gap-1">
                 {getCalendarDays(calendarMonth).map((date, idx) => {
                   if (!date) {
                     return <div key={`empty-${idx}`} className="aspect-square" />;
                   }
-                  
+
                   const dateString = formatDateString(date);
                   const isBlocked = isDateBlocked(dateString);
                   const isPast = isPastDate(date);
                   const isToday = formatDateString(new Date()) === dateString;
-                  
+
                   return (
                     <button
                       key={dateString}
@@ -1373,7 +1759,7 @@ export default function App() {
                   );
                 })}
               </div>
-              
+
               <div className="flex gap-4 justify-center mt-4 text-sm">
                 <div className="flex items-center gap-2">
                   <div className="w-4 h-4 bg-gray-700 rounded"></div>
@@ -1390,8 +1776,8 @@ export default function App() {
 
         {/* Settings View */}
         {view === 'settings' && isAdmin && (
-          <div>
-            <AdminNav activeView={view} onNavigate={setView} orders={orders} />
+          <div className="animate-fadeIn">
+            <AdminNav activeView={view} onNavigate={(v) => { if (v === 'prep' && !prepDate) setPrepDate(getNextPrepDate()); setView(v); }} orders={orders} />
 
             <div className="bg-gray-800 rounded-lg p-4 shadow-lg border border-gray-700">
               <h3 className="font-bold text-white mb-4">Email Notifications</h3>
@@ -1464,8 +1850,8 @@ export default function App() {
 
         {/* Orders View */}
         {view === 'orders' && isAdmin && (
-          <div>
-            <AdminNav activeView={view} onNavigate={setView} orders={orders} />
+          <div className="animate-fadeIn">
+            <AdminNav activeView={view} onNavigate={(v) => { if (v === 'prep' && !prepDate) setPrepDate(getNextPrepDate()); setView(v); }} orders={orders} />
 
             {/* View Mode Tabs */}
             <div className="flex gap-2 mb-4 items-center">
@@ -1503,9 +1889,10 @@ export default function App() {
               <span className="text-gray-400 text-sm py-1">Filter:</span>
               {[
                 { value: 'all', label: 'All' },
-                { value: 'pending', label: 'Pending', color: 'bg-yellow-600' },
-                { value: 'fulfilled', label: 'Fulfilled', color: 'bg-blue-600' },
-                { value: 'paid', label: 'Paid', color: 'bg-emerald-600' },
+                { value: 'placed', label: 'Placed', color: 'bg-yellow-600' },
+                { value: 'confirmed', label: 'Confirmed', color: 'bg-blue-600' },
+                { value: 'baking', label: 'Baking', color: 'bg-orange-500' },
+                { value: 'ready', label: 'Ready', color: 'bg-emerald-600' },
                 { value: 'complete', label: 'Complete', color: 'bg-green-600' },
               ].map(filter => (
                 <button
@@ -1518,11 +1905,9 @@ export default function App() {
                   }`}
                 >
                   {filter.label} ({
-                    filter.value === 'all' ? orders.length :
-                    filter.value === 'pending' ? orders.filter(o => !o.is_fulfilled && !o.is_paid).length :
-                    filter.value === 'fulfilled' ? orders.filter(o => o.is_fulfilled && !o.is_paid).length :
-                    filter.value === 'paid' ? orders.filter(o => o.is_paid && !o.is_fulfilled).length :
-                    orders.filter(o => o.is_fulfilled && o.is_paid).length
+                    filter.value === 'all'
+                      ? orders.length
+                      : orders.filter(o => normalizeStatus(o) === filter.value).length
                   })
                 </button>
               ))}
@@ -1548,7 +1933,7 @@ export default function App() {
                     Next →
                   </button>
                 </div>
-                
+
                 <div className="grid grid-cols-7 gap-1 mb-2">
                   {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
                     <div key={day} className="text-center text-gray-500 text-xs py-2">
@@ -1556,24 +1941,20 @@ export default function App() {
                     </div>
                   ))}
                 </div>
-                
+
                 <div className="grid grid-cols-7 gap-1">
                   {getCalendarDays(orderCalendarMonth).map((date, idx) => {
                     if (!date) {
                       return <div key={`empty-${idx}`} className="aspect-square" />;
                     }
-                    
+
                     const dateString = formatDateString(date);
                     const dayOrders = getOrdersForDate(dateString).filter(order => {
                       if (statusFilter === 'all') return true;
-                      if (statusFilter === 'pending') return !order.is_fulfilled && !order.is_paid;
-                      if (statusFilter === 'fulfilled') return order.is_fulfilled && !order.is_paid;
-                      if (statusFilter === 'paid') return order.is_paid && !order.is_fulfilled;
-                      if (statusFilter === 'complete') return order.is_fulfilled && order.is_paid;
-                      return true;
+                      return normalizeStatus(order) === statusFilter;
                     });
                     const isToday = formatDateString(new Date()) === dateString;
-                    
+
                     return (
                       <div
                         key={dateString}
@@ -1603,22 +1984,12 @@ export default function App() {
 
                 {/* Legend */}
                 <div className="flex flex-wrap gap-4 justify-center mt-4 text-sm">
-                  <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 bg-yellow-600 rounded"></div>
-                    <span className="text-gray-400">Pending</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 bg-blue-600 rounded"></div>
-                    <span className="text-gray-400">Fulfilled</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 bg-emerald-600 rounded"></div>
-                    <span className="text-gray-400">Paid</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 bg-green-600 rounded"></div>
-                    <span className="text-gray-400">Complete</span>
-                  </div>
+                  {STATUS_STEPS.map(step => (
+                    <div key={step} className="flex items-center gap-2">
+                      <div className={`w-4 h-4 ${STATUS_CONFIG[step].color} rounded`}></div>
+                      <span className="text-gray-400">{STATUS_CONFIG[step].label}</span>
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
@@ -1634,7 +2005,11 @@ export default function App() {
                 </button>
 
                 {getFilteredOrders().length === 0 ? (
-                  <p className="text-center text-gray-500 py-8">No orders match this filter.</p>
+                  <div className="text-center py-12">
+                    <div className="text-5xl mb-3">🔍</div>
+                    <p className="text-white font-medium mb-1">No matching orders</p>
+                    <p className="text-gray-500 text-sm">Try a different filter.</p>
+                  </div>
                 ) : (
                   <div className="space-y-3">
                     {getFilteredOrders().map(order => (
@@ -1645,7 +2020,7 @@ export default function App() {
                         formatFulfillmentType={formatFulfillmentType}
                         getOrderStatusColor={getOrderStatusColor}
                         getOrderStatusText={getOrderStatusText}
-                        toggleOrderFulfilled={toggleOrderFulfilled}
+                        onAdvanceStatus={advanceOrderStatus}
                         toggleOrderPaid={toggleOrderPaid}
                         deleteOrder={deleteOrder}
                       />
@@ -1657,13 +2032,100 @@ export default function App() {
           </div>
         )}
 
+        {/* Feature 3: Prep View */}
+        {view === 'prep' && isAdmin && (
+          <div className="animate-fadeIn">
+            <AdminNav activeView={view} onNavigate={(v) => { if (v === 'prep' && !prepDate) setPrepDate(getNextPrepDate()); setView(v); }} orders={orders} />
+
+            <div className="no-print mb-4">
+              <label className="text-gray-400 text-sm mb-1 block">Prep for:</label>
+              <input
+                type="date"
+                value={prepDate}
+                onChange={(e) => setPrepDate(e.target.value)}
+                className="bg-gray-700 border border-gray-600 rounded p-2 text-white focus:border-purple-500 focus:outline-none"
+              />
+            </div>
+
+            {(() => {
+              const prepOrders = orders.filter(o => o.requested_date === prepDate);
+              // Aggregate baking list
+              const itemMap = {};
+              prepOrders.forEach(order => {
+                (order.items || []).forEach(item => {
+                  const key = `${item.name}|${item.selectedOption || ''}`;
+                  if (!itemMap[key]) {
+                    itemMap[key] = { emoji: item.emoji, name: item.name, option: item.selectedOption || '', quantity: 0 };
+                  }
+                  itemMap[key].quantity += item.quantity;
+                });
+              });
+              const bakingList = Object.values(itemMap).sort((a, b) => b.quantity - a.quantity);
+
+              return (
+                <>
+                  {/* Aggregated baking list */}
+                  <div className="bg-gray-800 rounded-lg p-4 shadow-lg border border-gray-700 mb-4">
+                    <div className="flex justify-between items-center mb-3">
+                      <h3 className="font-bold text-white text-xl">
+                        Baking List - {prepOrders.length} order{prepOrders.length !== 1 ? 's' : ''}
+                      </h3>
+                      <button
+                        onClick={() => window.print()}
+                        className="no-print text-sm bg-gray-700 hover:bg-gray-600 text-gray-300 px-3 py-1 rounded"
+                      >
+                        🖨️ Print
+                      </button>
+                    </div>
+                    {bakingList.length === 0 ? (
+                      <p className="text-gray-500 text-sm">No orders for this date.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {bakingList.map((row, idx) => (
+                          <div key={idx} className="flex items-center gap-3 text-gray-200">
+                            <span className="text-xl">{row.emoji}</span>
+                            <span className="flex-1">
+                              {row.name}
+                              {row.option && <span className="text-purple-400 text-sm ml-1">({row.option})</span>}
+                            </span>
+                            <span className="font-bold text-white">x {row.quantity}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Individual orders */}
+                  {prepOrders.length > 0 && (
+                    <div className="space-y-3">
+                      {prepOrders.map(order => (
+                        <OrderCard
+                          key={order.id}
+                          order={order}
+                          formatPrice={formatPrice}
+                          formatFulfillmentType={formatFulfillmentType}
+                          getOrderStatusColor={getOrderStatusColor}
+                          getOrderStatusText={getOrderStatusText}
+                          onAdvanceStatus={advanceOrderStatus}
+                          toggleOrderPaid={toggleOrderPaid}
+                          deleteOrder={deleteOrder}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </>
+              );
+            })()}
+          </div>
+        )}
+
         {/* Order Detail Modal */}
         {selectedOrder && (
-          <div 
+          <div
             className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
             onClick={() => setSelectedOrder(null)}
           >
-            <div 
+            <div
               className="bg-gray-800 rounded-lg p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto"
               onClick={e => e.stopPropagation()}
             >
@@ -1673,17 +2135,17 @@ export default function App() {
                   onClick={() => setSelectedOrder(null)}
                   className="text-gray-400 hover:text-white text-xl"
                 >
-                  ×
+                  x
                 </button>
               </div>
-              
+
               <OrderCard
                 order={selectedOrder}
                 formatPrice={formatPrice}
                 formatFulfillmentType={formatFulfillmentType}
                 getOrderStatusColor={getOrderStatusColor}
                 getOrderStatusText={getOrderStatusText}
-                toggleOrderFulfilled={(id) => { toggleOrderFulfilled(id); }}
+                onAdvanceStatus={(id, dir) => { advanceOrderStatus(id, dir); }}
                 toggleOrderPaid={(id) => { toggleOrderPaid(id); }}
                 deleteOrder={(id) => { deleteOrder(id); setSelectedOrder(null); }}
                 expanded
@@ -1693,9 +2155,23 @@ export default function App() {
         )}
       </main>
 
+      {/* Bottom Sheet */}
+      <BottomSheet
+        item={bottomSheetItem}
+        isOpen={!!bottomSheetItem}
+        onClose={() => setBottomSheetItem(null)}
+        onAddToCart={(item, option, qty) => {
+          addToCart(item, option, qty);
+          setJustAdded(item.id);
+          setTimeout(() => setJustAdded(null), 1200);
+          setBottomSheetItem(null);
+        }}
+        formatPrice={formatPrice}
+      />
+
       {/* Sticky Cart Bar */}
       {!isAdmin && cart.length > 0 && view === 'menu' && (
-        <div className="fixed bottom-0 inset-x-0 z-50 bg-gray-900/95 backdrop-blur-md border-t border-gray-700" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+        <div className="fixed bottom-0 inset-x-0 z-30 bg-gray-900/95 backdrop-blur-md border-t border-gray-700" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
           <div className="max-w-2xl mx-auto px-4 py-3">
             <button
               onClick={() => setView('cart')}
@@ -1712,169 +2188,6 @@ export default function App() {
       <footer className="text-center py-6 text-gray-600 text-sm">
         Made with 💜 for friends
       </footer>
-    </div>
-  );
-}
-
-// Order Card Component
-function OrderCard({ order, formatPrice, formatFulfillmentType, getOrderStatusColor, getOrderStatusText, toggleOrderFulfilled, toggleOrderPaid, deleteOrder, expanded = false }) {
-  return (
-    <div 
-      className={`bg-gray-800 rounded-lg p-4 shadow border ${
-        order.is_fulfilled && order.is_paid
-          ? 'border-gray-700 opacity-60' 
-          : 'border-purple-500'
-      }`}
-    >
-      <div className="flex justify-between items-start mb-2">
-        <div>
-          <span className="font-bold text-white">{order.customer_name}</span>
-          <span className="text-sm text-gray-500 ml-2">
-            {new Date(order.created_at).toLocaleString()}
-          </span>
-        </div>
-        <span className={`text-xs px-2 py-1 rounded text-white ${getOrderStatusColor(order)}`}>
-          {getOrderStatusText(order)}
-        </span>
-      </div>
-      
-      {/* Order Details */}
-      <div className="text-sm text-gray-400 mb-2 space-y-1">
-        <div>📧 {order.customer_email}</div>
-        {order.customer_phone && <div>📞 {order.customer_phone}</div>}
-        {order.requested_date && (
-          <div>📅 Requested: {new Date(order.requested_date).toLocaleDateString()}</div>
-        )}
-        <div>
-          {formatFulfillmentType(order.fulfillment_type)}
-          {order.delivery_address && `: ${order.delivery_address}`}
-        </div>
-      </div>
-      
-      <ul className="text-sm mb-2 text-gray-300">
-        {order.items.map((item, idx) => (
-          <li key={idx}>
-            {item.emoji} {item.name}
-            {item.selectedOption && <span className="text-purple-400"> ({item.selectedOption})</span>}
-            {' '}× {item.quantity}
-            <span className="text-gray-500 ml-2">{formatPrice(item.price * item.quantity)}</span>
-          </li>
-        ))}
-      </ul>
-      
-      <div className="text-white font-medium mb-2">
-        Total: {formatPrice(order.total)}
-      </div>
-      
-      {order.note && (
-        <p className="text-sm text-purple-300 italic mb-2">"{order.note}"</p>
-      )}
-      
-      <div className="flex flex-wrap gap-2">
-        <button
-          onClick={() => toggleOrderFulfilled(order.id)}
-          className={`text-sm px-3 py-1 rounded font-medium ${
-            order.is_fulfilled
-              ? 'bg-blue-700 text-white'
-              : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-          }`}
-        >
-          {order.is_fulfilled ? '✓ Fulfilled' : 'Mark Fulfilled'}
-        </button>
-        <button
-          onClick={() => toggleOrderPaid(order.id)}
-          className={`text-sm px-3 py-1 rounded font-medium ${
-            order.is_paid
-              ? 'bg-green-700 text-white'
-              : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-          }`}
-        >
-          {order.is_paid ? '✓ Paid' : 'Mark Paid'}
-        </button>
-        <button
-          onClick={() => deleteOrder(order.id)}
-          className="text-sm bg-gray-700 hover:bg-gray-600 text-gray-300 px-3 py-1 rounded"
-        >
-          Delete
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// Admin Navigation Component
-function AdminNav({ activeView, onNavigate, orders }) {
-  const tabs = [
-    { view: 'admin', label: 'Items' },
-    { view: 'orders', label: `Orders (${orders.filter(o => !o.is_fulfilled || !o.is_paid).length})` },
-    { view: 'availability', label: 'Availability' },
-    { view: 'settings', label: 'Settings' },
-  ];
-  return (
-    <div className="flex gap-2 mb-6">
-      {tabs.map(tab => (
-        <button
-          key={tab.view}
-          onClick={() => onNavigate(tab.view)}
-          className={`flex-1 py-2 rounded-lg font-medium text-sm ${
-            activeView === tab.view ? 'bg-purple-600 text-white' : 'bg-gray-700 hover:bg-gray-600 text-white'
-          }`}
-        >
-          {tab.label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-// Menu Item Component
-function MenuItem({ item, onAddToCart, formatPrice }) {
-  const [selectedOption, setSelectedOption] = useState(item.options?.[0] || null);
-  const [added, setAdded] = useState(false);
-
-  const handleAddToCart = () => {
-    onAddToCart(item, selectedOption, 1);
-    setAdded(true);
-    setTimeout(() => setAdded(false), 1200);
-  };
-
-  return (
-    <div className="bg-gray-800 rounded-lg p-4 shadow-lg border border-gray-700 hover:border-purple-500 transition-colors">
-      <div className="flex items-start gap-3">
-        <span className="text-3xl flex-shrink-0">{item.emoji}</span>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <h3 className="font-semibold text-white text-lg">{item.name}</h3>
-            <span className="text-purple-300 font-medium">{formatPrice(item.price)}</span>
-          </div>
-          <p className="text-sm text-gray-400 mt-0.5">{item.description}</p>
-
-          {item.options && item.options.length > 0 && (
-            <div className="flex items-center gap-2 mt-2">
-              <select
-                value={selectedOption || ''}
-                onChange={(e) => setSelectedOption(e.target.value)}
-                className="flex-1 min-w-0 bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-white text-sm focus:border-purple-500 focus:outline-none"
-              >
-                {item.options.map(opt => (
-                  <option key={opt} value={opt}>{opt}</option>
-                ))}
-              </select>
-            </div>
-          )}
-        </div>
-
-        <button
-          onClick={handleAddToCart}
-          className={`flex-shrink-0 px-4 py-2 rounded-lg font-medium text-sm transition-all ${
-            added
-              ? 'bg-green-600 text-white scale-105'
-              : 'bg-purple-600 hover:bg-purple-500 text-white'
-          }`}
-        >
-          {added ? '✓' : 'Add'}
-        </button>
-      </div>
     </div>
   );
 }
