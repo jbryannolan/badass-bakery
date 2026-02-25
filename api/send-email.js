@@ -97,7 +97,7 @@ export default async function handler(req, res) {
         'Authorization': `Bearer ${RESEND_API_KEY}`,
       },
       body: JSON.stringify({
-        from: 'Badass Bakery <onboarding@resend.dev>',
+        from: 'Badass Bakery <orders@bryannolan.com>',
         to: [order.customer_email],
         subject: '🫏 Your Badass Bakery Order Confirmation',
         html: generateOrderHTML(order, false),
@@ -113,7 +113,7 @@ export default async function handler(req, res) {
           'Authorization': `Bearer ${RESEND_API_KEY}`,
         },
         body: JSON.stringify({
-          from: 'Badass Bakery <onboarding@resend.dev>',
+          from: 'Badass Bakery <orders@bryannolan.com>',
           to: [THERESA_EMAIL],
           subject: `🫏 New Order from ${order.customer_name}!`,
           html: generateOrderHTML(order, true),
