@@ -3,6 +3,33 @@ import { supabase } from './supabase';
 import { sendOrderEmails } from './email';
 import { sendPushNotification, getVapidPublicKey } from './push';
 
+// Image compression: resize to maxDimension and export as JPEG
+async function compressImage(file, maxDimension = 800, quality = 0.8) {
+  if (file.size > 20 * 1024 * 1024) throw new Error('File too large (max 20MB)');
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      let { width, height } = img;
+      if (width > maxDimension || height > maxDimension) {
+        const ratio = Math.min(maxDimension / width, maxDimension / height);
+        width = Math.round(width * ratio);
+        height = Math.round(height * ratio);
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+      canvas.toBlob(
+        (blob) => blob ? resolve(blob) : reject(new Error('Compression failed')),
+        'image/jpeg',
+        quality
+      );
+    };
+    img.onerror = () => reject(new Error('Failed to load image'));
+    img.src = URL.createObjectURL(file);
+  });
+}
+
 const STATUS_STEPS = ['placed', 'confirmed', 'baking', 'ready', 'complete'];
 const STATUS_CONFIG = {
   placed: { label: 'Placed', color: 'bg-yellow-600', emoji: '📋' },
@@ -84,7 +111,11 @@ function BottomSheet({ item, isOpen, onClose, onAddToCart, formatPrice }) {
         <div className="px-5 pt-2 pb-4" style={{ paddingBottom: 'env(safe-area-inset-bottom, 16px)' }}>
           {/* Item header */}
           <div className="text-center mb-4">
-            <span className="text-5xl">{item.emoji}</span>
+            {item.image_url ? (
+              <img src={item.image_url} alt={item.name} className="w-full h-48 object-cover rounded-xl mb-3" />
+            ) : (
+              <span className="text-5xl">{item.emoji}</span>
+            )}
             <h3 className="text-xl font-bold text-white mt-2">{item.name}</h3>
             {item.description && <p className="text-gray-400 text-sm mt-1">{item.description}</p>}
             <p className="text-amber-400 font-medium mt-1">{formatPrice(item.price)}</p>
@@ -297,6 +328,8 @@ function AdminBottomNav({ activeView, onNavigate, orders }) {
 
 // Menu Item Component
 function MenuItem({ item, onTapItem, formatPrice, isJustAdded }) {
+  const hasPhoto = !!item.image_url;
+
   return (
     <div
       onClick={() => onTapItem(item)}
@@ -304,20 +337,43 @@ function MenuItem({ item, onTapItem, formatPrice, isJustAdded }) {
         isJustAdded ? 'border-green-500' : 'border-gray-700 hover:border-purple-500'
       }`}
     >
-      <div className="flex items-start gap-3">
-        <span className="text-3xl flex-shrink-0">{item.emoji}</span>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
+      {hasPhoto ? (
+        /* Photo layout: text left, image right with + button overlay */
+        <div className="flex items-start gap-3">
+          <div className="flex-1 min-w-0">
             <h3 className="font-semibold text-white text-lg">{item.name}</h3>
-            <span className="text-amber-400 font-medium">{formatPrice(item.price)}</span>
+            <span className="text-amber-400 font-medium text-sm">{formatPrice(item.price)}</span>
+            {item.description && <p className="text-sm text-gray-400 mt-0.5 line-clamp-2">{item.description}</p>}
           </div>
-          <p className="text-sm text-gray-400 mt-0.5">{item.description}</p>
+          <div className="relative flex-shrink-0">
+            <img
+              src={item.image_url}
+              alt={item.name}
+              loading="lazy"
+              className="w-20 h-20 object-cover rounded-lg"
+            />
+            <div className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-purple-600 text-white flex items-center justify-center text-sm font-bold shadow-lg">
+              +
+            </div>
+          </div>
         </div>
+      ) : (
+        /* Emoji layout: unchanged */
+        <div className="flex items-start gap-3">
+          <span className="text-3xl flex-shrink-0">{item.emoji}</span>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h3 className="font-semibold text-white text-lg">{item.name}</h3>
+              <span className="text-amber-400 font-medium">{formatPrice(item.price)}</span>
+            </div>
+            <p className="text-sm text-gray-400 mt-0.5">{item.description}</p>
+          </div>
 
-        <div className="flex-shrink-0 w-10 h-10 rounded-full bg-purple-600 hover:bg-purple-500 text-white flex items-center justify-center text-xl font-bold transition-colors">
-          +
+          <div className="flex-shrink-0 w-10 h-10 rounded-full bg-purple-600 hover:bg-purple-500 text-white flex items-center justify-center text-xl font-bold transition-colors">
+            +
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
@@ -397,6 +453,11 @@ export default function App() {
   const [pushLoading, setPushLoading] = useState(false);
   const [pushTestSent, setPushTestSent] = useState(false);
   const [blockedDatesOpen, setBlockedDatesOpen] = useState(false);
+
+  // Photo upload state
+  const [newItemPhoto, setNewItemPhoto] = useState(null);
+  const [newItemPhotoPreview, setNewItemPhotoPreview] = useState(null);
+  const [uploadingPhotoFor, setUploadingPhotoFor] = useState(null);
 
   useEffect(() => {
     loadData();
@@ -629,6 +690,29 @@ export default function App() {
     for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
     return arr;
   }
+
+  // Photo upload helpers
+  const uploadItemPhoto = async (file, itemId) => {
+    const compressed = await compressImage(file);
+    const filename = `${itemId}_${Date.now()}.jpg`;
+    const { error } = await supabase.storage.from('item-photos').upload(filename, compressed, {
+      contentType: 'image/jpeg',
+      upsert: false,
+    });
+    if (error) throw error;
+    const { data: urlData } = supabase.storage.from('item-photos').getPublicUrl(filename);
+    return urlData.publicUrl;
+  };
+
+  const deleteItemPhoto = async (imageUrl) => {
+    if (!imageUrl) return;
+    try {
+      const filename = imageUrl.split('/').pop();
+      await supabase.storage.from('item-photos').remove([filename]);
+    } catch (e) {
+      console.error('Error deleting photo from storage:', e);
+    }
+  };
 
   const loadUserProfile = async (userId) => {
     try {
@@ -985,12 +1069,34 @@ export default function App() {
       return;
     }
 
+    let insertedItem = data?.[0];
+
+    // Upload photo if one was selected
+    if (insertedItem && newItemPhoto) {
+      try {
+        const imageUrl = await uploadItemPhoto(newItemPhoto, insertedItem.id);
+        await supabase.from('items').update({ image_url: imageUrl }).eq('id', insertedItem.id);
+        insertedItem = { ...insertedItem, image_url: imageUrl };
+      } catch (e) {
+        console.error('Photo upload failed:', e);
+      }
+    }
+
     setNewItem({ name: '', description: '', emoji: '🍪', price: '', options: '' });
-    if (data?.[0]) setItems(prev => [...prev, data[0]]);
+    setNewItemPhoto(null);
+    setNewItemPhotoPreview(null);
+    if (insertedItem) setItems(prev => [...prev, insertedItem]);
   };
 
   const deleteItem = async (itemId) => {
     if (!window.confirm('Delete this item? This cannot be undone.')) return;
+
+    // Clean up photo from storage first
+    const item = items.find(i => i.id === itemId);
+    if (item?.image_url) {
+      await deleteItemPhoto(item.image_url);
+    }
+
     const { error } = await supabase
       .from('items')
       .delete()
@@ -1694,6 +1800,41 @@ export default function App() {
                 onChange={(e) => setNewItem({ ...newItem, description: e.target.value })}
                 className="w-full bg-gray-700 border border-gray-600 rounded p-2 mb-2 text-white placeholder-gray-400 focus:border-purple-500 focus:outline-none"
               />
+
+              {/* Photo upload */}
+              <div className="mb-2">
+                {newItemPhotoPreview ? (
+                  <div className="relative inline-block">
+                    <img src={newItemPhotoPreview} alt="Preview" className="w-20 h-20 object-cover rounded-lg border border-gray-600" />
+                    <button
+                      onClick={() => { setNewItemPhoto(null); setNewItemPhotoPreview(null); }}
+                      className="absolute -top-2 -right-2 w-6 h-6 bg-red-600 text-white rounded-full text-xs flex items-center justify-center hover:bg-red-500"
+                    >
+                      x
+                    </button>
+                  </div>
+                ) : (
+                  <label className="flex items-center gap-2 border-2 border-dashed border-gray-600 rounded-lg p-3 cursor-pointer hover:border-purple-500 transition-colors">
+                    <span className="text-gray-400 text-lg">📷</span>
+                    <span className="text-gray-400 text-sm">Add Photo (optional)</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          setNewItemPhoto(file);
+                          setNewItemPhotoPreview(URL.createObjectURL(file));
+                        }
+                        e.target.value = '';
+                      }}
+                    />
+                  </label>
+                )}
+              </div>
+
               <div className="flex gap-2 mb-2">
                 <input
                   type="number"
@@ -1863,6 +2004,62 @@ export default function App() {
                       >
                         {item.options?.length > 0 ? item.options.join(', ') : 'None'} ✏️
                       </button>
+                    )}
+                  </div>
+
+                  {/* Photo management */}
+                  <div className="flex items-center gap-2 mt-2">
+                    <span className="text-gray-400 text-sm w-16">Photo:</span>
+                    {uploadingPhotoFor === item.id ? (
+                      <span className="text-gray-400 text-sm">Uploading...</span>
+                    ) : item.image_url ? (
+                      <div className="flex items-center gap-2">
+                        <img src={item.image_url} alt="" className="w-10 h-10 object-cover rounded border border-gray-600" />
+                        <label className="text-purple-300 hover:text-purple-200 text-sm cursor-pointer">
+                          Replace
+                          <input type="file" accept="image/*" capture="environment" className="hidden" onChange={async (e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            e.target.value = '';
+                            setUploadingPhotoFor(item.id);
+                            try {
+                              await deleteItemPhoto(item.image_url);
+                              const imageUrl = await uploadItemPhoto(file, item.id);
+                              await supabase.from('items').update({ image_url: imageUrl }).eq('id', item.id);
+                              setItems(prev => prev.map(i => i.id === item.id ? { ...i, image_url: imageUrl } : i));
+                            } catch (err) { console.error('Replace photo error:', err); }
+                            setUploadingPhotoFor(null);
+                          }} />
+                        </label>
+                        <button
+                          onClick={async () => {
+                            setUploadingPhotoFor(item.id);
+                            await deleteItemPhoto(item.image_url);
+                            await supabase.from('items').update({ image_url: null }).eq('id', item.id);
+                            setItems(prev => prev.map(i => i.id === item.id ? { ...i, image_url: null } : i));
+                            setUploadingPhotoFor(null);
+                          }}
+                          className="text-red-400 hover:text-red-300 text-sm"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ) : (
+                      <label className="text-purple-300 hover:text-purple-200 text-sm cursor-pointer">
+                        No photo 📷
+                        <input type="file" accept="image/*" capture="environment" className="hidden" onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          e.target.value = '';
+                          setUploadingPhotoFor(item.id);
+                          try {
+                            const imageUrl = await uploadItemPhoto(file, item.id);
+                            await supabase.from('items').update({ image_url: imageUrl }).eq('id', item.id);
+                            setItems(prev => prev.map(i => i.id === item.id ? { ...i, image_url: imageUrl } : i));
+                          } catch (err) { console.error('Upload photo error:', err); }
+                          setUploadingPhotoFor(null);
+                        }} />
+                      </label>
                     )}
                   </div>
                 </div>
