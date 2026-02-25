@@ -1820,7 +1820,6 @@ export default function App() {
                     <input
                       type="file"
                       accept="image/*"
-                      capture="environment"
                       className="hidden"
                       onChange={(e) => {
                         const file = e.target.files?.[0];
@@ -2017,7 +2016,7 @@ export default function App() {
                         <img src={item.image_url} alt="" className="w-10 h-10 object-cover rounded border border-gray-600" />
                         <label className="text-purple-300 hover:text-purple-200 text-sm cursor-pointer">
                           Replace
-                          <input type="file" accept="image/*" capture="environment" className="hidden" onChange={async (e) => {
+                          <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
                             const file = e.target.files?.[0];
                             if (!file) return;
                             e.target.value = '';
@@ -2047,7 +2046,7 @@ export default function App() {
                     ) : (
                       <label className="text-purple-300 hover:text-purple-200 text-sm cursor-pointer">
                         No photo 📷
-                        <input type="file" accept="image/*" capture="environment" className="hidden" onChange={async (e) => {
+                        <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
                           const file = e.target.files?.[0];
                           if (!file) return;
                           e.target.value = '';
