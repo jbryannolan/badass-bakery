@@ -402,6 +402,7 @@ export default function App() {
   const [tempOptions, setTempOptions] = useState('');
   const [tempDescription, setTempDescription] = useState('');
   const [calendarMonth, setCalendarMonth] = useState(new Date());
+  const [checkoutCalendarMonth, setCheckoutCalendarMonth] = useState(new Date());
   const [orderCalendarMonth, setOrderCalendarMonth] = useState(new Date());
   const [ordersSubView, setOrdersSubView] = useState('prep');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -503,8 +504,9 @@ export default function App() {
       if (retryCount < 2) {
         console.log(`Retrying loadData (attempt ${retryCount + 2})...`);
         return loadData(retryCount + 1);
+      } else {
+        setError('Failed to load data: ' + (err.message || 'Unknown error'));
       }
-      setError('Failed to load data: ' + (err.message || 'Unknown error'));
     }
     setLoading(false);
   };
@@ -1136,7 +1138,6 @@ export default function App() {
   const formatFulfillmentType = (type) => {
     switch (type) {
       case 'pickup': return '📍 Pickup';
-      case 'gym': return '🏋️ Gym Pickup (6am)';
       case 'delivery': return '🚗 Delivery';
       default: return type;
     }
@@ -1470,28 +1471,99 @@ export default function App() {
               />
 
               <div className="mb-3">
-                <label className="text-gray-400 text-sm mb-1 block">Requested date <span className="text-red-400">*</span></label>
-                <input
-                  type="date"
-                  value={requestedDate}
-                  onChange={(e) => {
-                    if (!isDateBlocked(e.target.value)) {
-                      setRequestedDate(e.target.value);
-                    } else {
-                      alert('Sorry, that date is not available. Please select a different date.');
-                    }
-                  }}
-                  min={getTomorrowDate()}
-                  className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white focus:border-purple-500 focus:outline-none"
-                />
-                {blockedDates.length > 0 && (
-                  <p className="text-gray-500 text-xs mt-1">Some dates may be unavailable</p>
-                )}
+                <label className="text-gray-400 text-sm mb-2 block">Requested date <span className="text-red-400">*</span></label>
+                <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
+                  <div className="flex justify-between items-center mb-3">
+                    <button
+                      onClick={() => {
+                        const prev = new Date(checkoutCalendarMonth.getFullYear(), checkoutCalendarMonth.getMonth() - 1);
+                        const now = new Date();
+                        if (prev.getFullYear() > now.getFullYear() || (prev.getFullYear() === now.getFullYear() && prev.getMonth() >= now.getMonth())) {
+                          setCheckoutCalendarMonth(prev);
+                        }
+                      }}
+                      className={`p-1.5 rounded-full transition-colors ${
+                        checkoutCalendarMonth.getMonth() === new Date().getMonth() && checkoutCalendarMonth.getFullYear() === new Date().getFullYear()
+                          ? 'text-gray-600 cursor-not-allowed'
+                          : 'text-gray-400 hover:text-white hover:bg-gray-700'
+                      }`}
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+                      </svg>
+                    </button>
+                    <h4 className="font-semibold text-white text-sm">
+                      {checkoutCalendarMonth.toLocaleString('default', { month: 'long', year: 'numeric' })}
+                    </h4>
+                    <button
+                      onClick={() => setCheckoutCalendarMonth(new Date(checkoutCalendarMonth.getFullYear(), checkoutCalendarMonth.getMonth() + 1))}
+                      className="p-1.5 rounded-full text-gray-400 hover:text-white hover:bg-gray-700 transition-colors"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+                      </svg>
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-7 gap-0 mb-1">
+                    {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(day => (
+                      <div key={day} className="text-center text-gray-500 text-xs py-1.5 font-medium">
+                        {day}
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="grid grid-cols-7 gap-0">
+                    {getCalendarDays(checkoutCalendarMonth).map((date, idx) => {
+                      if (!date) {
+                        return <div key={`empty-${idx}`} className="aspect-square" />;
+                      }
+
+                      const dateString = formatDateString(date);
+                      const isBlocked = isDateBlocked(dateString);
+                      const isPast = isPastDate(date);
+                      const isToday = formatDateString(new Date()) === dateString;
+                      const isSelected = requestedDate === dateString;
+                      const isUnavailable = isPast || isToday || isBlocked;
+
+                      return (
+                        <button
+                          key={dateString}
+                          onClick={() => !isUnavailable && setRequestedDate(dateString)}
+                          disabled={isUnavailable}
+                          className={`aspect-square rounded-full flex items-center justify-center text-sm transition-all ${
+                            isSelected
+                              ? 'bg-purple-600 text-white font-bold'
+                              : isUnavailable
+                                ? 'text-gray-600 cursor-not-allowed line-through'
+                                : 'text-white hover:bg-gray-700 font-medium cursor-pointer'
+                          }`}
+                        >
+                          {date.getDate()}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {requestedDate && (
+                    <div className="mt-3 pt-3 border-t border-gray-700 flex justify-between items-center">
+                      <span className="text-sm text-gray-300">
+                        {new Date(requestedDate + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                      </span>
+                      <button
+                        onClick={() => setRequestedDate('')}
+                        className="text-xs text-gray-500 hover:text-gray-300 transition-colors"
+                      >
+                        Clear
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div className="mb-3">
                 <label className="text-gray-400 text-sm mb-1 block">How do you want to get it?</label>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 gap-2">
                   <button
                     onClick={() => setFulfillmentType('pickup')}
                     className={`py-2 px-2 rounded font-medium transition-colors text-sm ${
@@ -1501,16 +1573,6 @@ export default function App() {
                     }`}
                   >
                     📍 Pickup
-                  </button>
-                  <button
-                    onClick={() => setFulfillmentType('gym')}
-                    className={`py-2 px-2 rounded font-medium transition-colors text-sm ${
-                      fulfillmentType === 'gym'
-                        ? 'bg-purple-600 text-white'
-                        : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                    }`}
-                  >
-                    🏋️ Gym (6am)
                   </button>
                   <button
                     onClick={() => setFulfillmentType('delivery')}
