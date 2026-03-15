@@ -326,54 +326,41 @@ function AdminBottomNav({ activeView, onNavigate, orders }) {
   );
 }
 
-// Menu Item Component
+// Menu Item Component — DoorDash-style photo-hero card
 function MenuItem({ item, onTapItem, formatPrice, isJustAdded }) {
   const hasPhoto = !!item.image_url;
 
   return (
     <div
       onClick={() => onTapItem(item)}
-      className={`bg-gray-800 rounded-lg p-4 shadow-lg border transition-colors cursor-pointer ${
-        isJustAdded ? 'border-green-500' : 'border-gray-700 hover:border-purple-500'
+      className={`rounded-xl overflow-hidden cursor-pointer transition-all active:scale-[0.97] ${
+        isJustAdded ? 'ring-2 ring-green-500' : ''
       }`}
     >
-      {hasPhoto ? (
-        /* Photo layout: text left, image right with + button overlay */
-        <div className="flex items-start gap-3">
-          <div className="flex-1 min-w-0">
-            <h3 className="font-semibold text-white text-lg">{item.name}</h3>
-            <span className="text-amber-400 font-medium text-sm">{formatPrice(item.price)}</span>
-            {item.description && <p className="text-sm text-gray-400 mt-0.5 line-clamp-2">{item.description}</p>}
+      {/* Photo / placeholder hero */}
+      <div className="relative">
+        {hasPhoto ? (
+          <img
+            src={item.image_url}
+            alt={item.name}
+            loading="lazy"
+            className="w-full aspect-square object-cover"
+          />
+        ) : (
+          <div className="w-full aspect-square bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center">
+            <span className="text-6xl">{item.emoji}</span>
           </div>
-          <div className="relative flex-shrink-0">
-            <img
-              src={item.image_url}
-              alt={item.name}
-              loading="lazy"
-              className="w-20 h-20 object-cover rounded-lg"
-            />
-            <div className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-purple-600 text-white flex items-center justify-center text-sm font-bold shadow-lg">
-              +
-            </div>
-          </div>
-        </div>
-      ) : (
-        /* Emoji layout: unchanged */
-        <div className="flex items-start gap-3">
-          <span className="text-3xl flex-shrink-0">{item.emoji}</span>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <h3 className="font-semibold text-white text-lg">{item.name}</h3>
-              <span className="text-amber-400 font-medium">{formatPrice(item.price)}</span>
-            </div>
-            <p className="text-sm text-gray-400 mt-0.5">{item.description}</p>
-          </div>
-
-          <div className="flex-shrink-0 w-10 h-10 rounded-full bg-purple-600 hover:bg-purple-500 text-white flex items-center justify-center text-xl font-bold transition-colors">
-            +
-          </div>
-        </div>
-      )}
+        )}
+        {/* + button overlay */}
+        <button className="absolute bottom-2 right-2 w-9 h-9 rounded-full bg-white text-gray-900 flex items-center justify-center text-xl font-bold shadow-md hover:bg-gray-100 transition-colors">
+          +
+        </button>
+      </div>
+      {/* Text below photo */}
+      <div className="px-1 pt-2 pb-1">
+        <h3 className="font-semibold text-white text-sm leading-tight line-clamp-2">{item.name}</h3>
+        <p className="text-amber-400 text-sm font-medium mt-0.5">{formatPrice(item.price)}</p>
+      </div>
     </div>
   );
 }
@@ -1339,7 +1326,7 @@ export default function App() {
             ) : (
               <>
                 <p className="text-xs uppercase tracking-widest text-gray-500 mb-3 text-center">Our Menu</p>
-                <div className="space-y-3 mb-6">
+                <div className="grid grid-cols-2 gap-4 mb-6">
                   {items.filter(i => i.in_stock).map(item => (
                     <MenuItem
                       key={item.id}
