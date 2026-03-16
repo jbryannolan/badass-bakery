@@ -36,22 +36,24 @@ self.addEventListener('push', (event) => {
   );
 });
 
-// Notification clicked — focus or open the app
+// Notification clicked — navigate to the order
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
 
   const url = event.notification.data?.url || '/';
+  const targetUrl = new URL(url, self.location.origin).href;
 
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
-      // Focus existing window if one is open
+      // Focus existing window and navigate it to the order
       for (const client of clients) {
         if (client.url.includes(self.location.origin) && 'focus' in client) {
+          client.navigate(targetUrl);
           return client.focus();
         }
       }
-      // Otherwise open a new window
-      return self.clients.openWindow(url);
+      // Otherwise open a new window at the order URL
+      return self.clients.openWindow(targetUrl);
     })
   );
 });

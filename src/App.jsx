@@ -467,6 +467,33 @@ export default function App() {
     };
   }, []);
 
+  // Deep-link: ?order=ID from push notification click
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const orderId = params.get('order');
+    if (!orderId) return;
+
+    // Clean the URL so refreshing doesn't re-trigger
+    window.history.replaceState({}, '', window.location.pathname);
+
+    // Wait for orders to load, then navigate to admin orders and select the order
+    const waitForOrders = setInterval(() => {
+      setOrders(prev => {
+        const target = prev.find(o => o.id === parseInt(orderId));
+        if (target) {
+          clearInterval(waitForOrders);
+          setIsAdmin(true);
+          setView('orders');
+          setSelectedOrder(target);
+        }
+        return prev;
+      });
+    }, 200);
+
+    // Give up after 5s
+    setTimeout(() => clearInterval(waitForOrders), 5000);
+  }, []);
+
   // Feature 4: PWA install prompt effect
   useEffect(() => {
     const standalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
@@ -880,9 +907,11 @@ export default function App() {
       is_paid: false
     };
 
-    const { error } = await supabase
+    const { data: inserted, error } = await supabase
       .from('orders')
-      .insert(orderData);
+      .insert(orderData)
+      .select('id')
+      .single();
 
     if (error) {
       console.error('Error submitting order:', error);
@@ -894,12 +923,13 @@ export default function App() {
     // Send confirmation emails (don't block on this)
     sendOrderEmails({ ...orderData, admin_email: adminEmail }).catch(err => console.error('Email error:', err));
 
-    // Send push notification to all admins (don't block)
+    // Send push notification to all admins with deep link to this order
+    const orderUrl = inserted?.id ? `/?order=${inserted.id}` : '/';
     for (const email of adminEmails) {
       sendPushNotification({
         title: '🫏 New Order!',
         body: `${orderData.customer_name} - ${formatPrice(orderData.total)}`,
-        url: '/',
+        url: orderUrl,
         admin_email: email,
       }).catch(err => console.error('Push error:', err));
     }
