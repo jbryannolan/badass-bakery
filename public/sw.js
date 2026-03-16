@@ -45,10 +45,10 @@ self.addEventListener('notificationclick', (event) => {
 
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
-      // Focus existing window and navigate it to the order
+      // If app is already open, message it to navigate to the order
       for (const client of clients) {
         if (client.url.includes(self.location.origin) && 'focus' in client) {
-          client.navigate(targetUrl);
+          client.postMessage({ type: 'NAVIGATE_TO_ORDER', url: url });
           return client.focus();
         }
       }

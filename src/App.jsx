@@ -467,19 +467,26 @@ export default function App() {
     };
   }, []);
 
-  // Deep-link: ?order=ID from push notification click
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const orderId = params.get('order');
-    if (!orderId) return;
+  // Deep-link: navigate to a specific order by ID
+  const navigateToOrder = (orderId) => {
+    const id = parseInt(orderId);
+    if (!id) return;
 
-    // Clean the URL so refreshing doesn't re-trigger
-    window.history.replaceState({}, '', window.location.pathname);
+    // Try immediately with current orders
+    setOrders(prev => {
+      const target = prev.find(o => o.id === id);
+      if (target) {
+        setIsAdmin(true);
+        setView('orders');
+        setSelectedOrder(target);
+      }
+      return prev;
+    });
 
-    // Wait for orders to load, then navigate to admin orders and select the order
+    // Also poll in case orders haven't loaded yet (cold start)
     const waitForOrders = setInterval(() => {
       setOrders(prev => {
-        const target = prev.find(o => o.id === parseInt(orderId));
+        const target = prev.find(o => o.id === id);
         if (target) {
           clearInterval(waitForOrders);
           setIsAdmin(true);
@@ -488,10 +495,34 @@ export default function App() {
         }
         return prev;
       });
-    }, 200);
-
-    // Give up after 5s
+    }, 300);
     setTimeout(() => clearInterval(waitForOrders), 5000);
+  };
+
+  // Handle ?order=ID in URL (cold start from notification)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const orderId = params.get('order');
+    if (orderId) {
+      window.history.replaceState({}, '', window.location.pathname);
+      navigateToOrder(orderId);
+    }
+  }, []);
+
+  // Handle postMessage from service worker (app already open)
+  useEffect(() => {
+    const handler = (event) => {
+      if (event.data?.type === 'NAVIGATE_TO_ORDER') {
+        const url = new URL(event.data.url, window.location.origin);
+        const orderId = url.searchParams.get('order');
+        if (orderId) {
+          // Reload orders first to pick up the new one, then navigate
+          loadOrders().then(() => navigateToOrder(orderId));
+        }
+      }
+    };
+    navigator.serviceWorker?.addEventListener('message', handler);
+    return () => navigator.serviceWorker?.removeEventListener('message', handler);
   }, []);
 
   // Feature 4: PWA install prompt effect
