@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from './supabase';
-import { sendOrderEmails } from './email';
+import { sendOrderEmails, sendConfirmationEmail } from './email';
 import { sendPushNotification, getVapidPublicKey } from './push';
 
 // Image compression: resize to maxDimension and export as JPEG
@@ -428,6 +428,9 @@ export default function App() {
   const [bottomSheetItem, setBottomSheetItem] = useState(null);
   const [justAdded, setJustAdded] = useState(null);
 
+  // Order confirmation overlay (customer notification deep-link)
+  const [confirmationOrder, setConfirmationOrder] = useState(null);
+
   // Feature 3: Admin Baking Prep View
   const [prepDate, setPrepDate] = useState('');
 
@@ -499,13 +502,22 @@ export default function App() {
     setTimeout(() => clearInterval(waitForOrders), 5000);
   };
 
-  // Handle ?order=ID in URL (cold start from notification)
+  // Handle ?order=ID or ?confirmed=ID in URL (cold start from notification)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
+    window.history.replaceState({}, '', window.location.pathname);
+
     const orderId = params.get('order');
     if (orderId) {
-      window.history.replaceState({}, '', window.location.pathname);
       navigateToOrder(orderId);
+      return;
+    }
+
+    const confirmedId = params.get('confirmed');
+    if (confirmedId) {
+      supabase.from('orders').select('*')
+        .eq('id', parseInt(confirmedId)).single()
+        .then(({ data }) => { if (data) setConfirmationOrder(data); });
     }
   }, []);
 
@@ -514,9 +526,19 @@ export default function App() {
     const handler = (event) => {
       if (event.data?.type === 'NAVIGATE_TO_ORDER') {
         const url = new URL(event.data.url, window.location.origin);
+
+        // Customer confirmation deep-link
+        const confirmedId = url.searchParams.get('confirmed');
+        if (confirmedId) {
+          supabase.from('orders').select('*')
+            .eq('id', parseInt(confirmedId)).single()
+            .then(({ data }) => { if (data) setConfirmationOrder(data); });
+          return;
+        }
+
+        // Admin order deep-link
         const orderId = url.searchParams.get('order');
         if (orderId) {
-          // Reload orders first to pick up the new one, then navigate
           loadOrders().then(() => navigateToOrder(orderId));
         }
       }
@@ -1014,6 +1036,18 @@ export default function App() {
       console.error('Error advancing order status:', error);
       return;
     }
+
+    // Notify customer when order is confirmed
+    if (nextStatus === 'confirmed' && order.customer_email) {
+      sendConfirmationEmail(order).catch(err => console.error('Confirmation email error:', err));
+      sendPushNotification({
+        title: 'Your order is confirmed! ✅',
+        body: `Pay ${formatPrice(order.total)} via Venmo @Theresa-Ulrich-5`,
+        url: `/?confirmed=${orderId}`,
+        admin_email: order.customer_email,
+      }).catch(err => console.error('Customer push error:', err));
+    }
+
     const fresh = await loadOrders();
     if (selectedOrder?.id === orderId) {
       setSelectedOrder(fresh.find(o => o.id === orderId) || null);
@@ -1801,6 +1835,36 @@ export default function App() {
                 {newPasswordSaving ? 'Saving...' : 'Set Password'}
               </button>
             </div>
+
+            {/* Customer push notifications */}
+            {'serviceWorker' in navigator && 'PushManager' in window && (
+              <div className="bg-gray-800 rounded-lg p-4 border border-gray-700 mb-6">
+                <h3 className="font-bold text-white mb-1">Order Notifications</h3>
+                <p className="text-gray-400 text-xs mb-3">Get notified when your orders are confirmed.</p>
+                <div className="flex items-center gap-3 mb-3">
+                  <div className={`w-2 h-2 rounded-full ${pushEnabled ? 'bg-green-400' : 'bg-gray-500'}`} />
+                  <span className="text-sm text-gray-300">
+                    {pushEnabled ? 'Notifications active' : 'Not enabled'}
+                  </span>
+                </div>
+                <button
+                  onClick={pushEnabled ? unsubscribeFromPush : subscribeToPush}
+                  disabled={pushLoading}
+                  className={`px-4 py-2 rounded-lg font-medium text-sm ${
+                    pushEnabled
+                      ? 'bg-red-700 hover:bg-red-600 text-white'
+                      : 'bg-purple-600 hover:bg-purple-500 text-white'
+                  } disabled:opacity-50`}
+                >
+                  {pushLoading ? 'Working...' : pushEnabled ? 'Disable' : 'Enable Notifications'}
+                </button>
+                {typeof Notification !== 'undefined' && Notification.permission === 'denied' && (
+                  <p className="text-red-400 text-xs mt-2">
+                    Notifications are blocked. Check your browser/device settings.
+                  </p>
+                )}
+              </div>
+            )}
 
             {/* Order history */}
             <div className="flex items-center justify-between mb-3">
@@ -2802,6 +2866,57 @@ export default function App() {
           }}
           orders={orders}
         />
+      )}
+
+      {/* Order Confirmation Overlay */}
+      {confirmationOrder && (
+        <>
+          <div
+            className="fixed inset-0 bg-black/70 z-50"
+            onClick={() => setConfirmationOrder(null)}
+          />
+          <div className="fixed inset-x-4 top-1/2 -translate-y-1/2 z-50 bg-gray-800 rounded-2xl p-6 max-w-md mx-auto border border-purple-500/30 shadow-2xl">
+            <div className="text-center">
+              <div className="text-5xl mb-3">✅</div>
+              <h2 className="text-2xl font-bold text-white mb-2">Your order is confirmed!</h2>
+              <p className="text-gray-400 mb-4">Theresa is on it. Here's how to pay:</p>
+
+              <div className="bg-gray-900 rounded-lg p-3 mb-4 text-left">
+                <ul className="text-gray-300 text-sm space-y-1">
+                  {(confirmationOrder.items || []).map((item, idx) => (
+                    <li key={idx}>
+                      {item.emoji} {item.name}
+                      {item.selectedOption && <span className="text-purple-400"> ({item.selectedOption})</span>}
+                      {' '}x {item.quantity}
+                    </li>
+                  ))}
+                </ul>
+                <div className="border-t border-gray-700 mt-2 pt-2 text-right">
+                  <span className="text-amber-400 font-bold">{formatPrice(confirmationOrder.total)}</span>
+                </div>
+              </div>
+
+              <a
+                href="https://venmo.com/Theresa-Ulrich-5"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block w-full bg-[#008CFF] hover:bg-[#0070CC] text-white py-4 rounded-xl font-bold text-lg transition-colors mb-3"
+              >
+                Pay {formatPrice(confirmationOrder.total)} on Venmo
+              </a>
+              <p className="text-gray-500 text-sm mb-4">
+                Send to <strong className="text-gray-300">@Theresa-Ulrich-5</strong>
+              </p>
+
+              <button
+                onClick={() => setConfirmationOrder(null)}
+                className="text-gray-400 hover:text-white text-sm"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </>
       )}
 
       {/* Footer */}
