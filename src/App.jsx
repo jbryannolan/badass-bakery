@@ -2896,14 +2896,20 @@ export default function App() {
                 </div>
               </div>
 
-              <a
-                href="https://venmo.com/Theresa-Ulrich-5"
-                target="_blank"
-                rel="noopener noreferrer"
+              <button
+                onClick={() => {
+                  const amount = confirmationOrder.total;
+                  const note = encodeURIComponent('Badass Bakery Order');
+                  // Try Venmo deep link first (opens the app), fall back to web
+                  window.location.href = `venmo://paycharge?txn=pay&recipients=Theresa-Ulrich-5&amount=${amount}&note=${note}`;
+                  setTimeout(() => {
+                    window.open(`https://venmo.com/Theresa-Ulrich-5?txn=pay&amount=${amount}&note=${note}`, '_blank');
+                  }, 1500);
+                }}
                 className="block w-full bg-[#008CFF] hover:bg-[#0070CC] text-white py-4 rounded-xl font-bold text-lg transition-colors mb-3"
               >
                 Pay {formatPrice(confirmationOrder.total)} on Venmo
-              </a>
+              </button>
               <p className="text-gray-500 text-sm mb-4">
                 Send to <strong className="text-gray-300">@Theresa-Ulrich-5</strong>
               </p>
