@@ -900,7 +900,17 @@ export default function App() {
   };
 
   const isDateBlocked = (dateString) => {
-    return blockedDates.includes(dateString);
+    if (blockedDates.includes(dateString)) return true;
+    // Auto-block today + next 2 days in Mountain Time
+    const now = new Date();
+    const mt = new Date(now.toLocaleString('en-US', { timeZone: 'America/Denver' }));
+    for (let i = 0; i <= 2; i++) {
+      const d = new Date(mt);
+      d.setDate(d.getDate() + i);
+      const ds = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      if (ds === dateString) return true;
+    }
+    return false;
   };
 
   const addToCart = (item, selectedOption = null, quantity = 1) => {
