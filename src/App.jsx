@@ -73,22 +73,51 @@ function StatusTracker({ order }) {
   );
 }
 
+const BAGEL_PACK_SIZE = 4;
+
 // Bottom Sheet Component
 function BottomSheet({ item, isOpen, onClose, onAddToCart, formatPrice }) {
   const [selectedOption, setSelectedOption] = useState(item?.options?.[0] || null);
   const [quantity, setQuantity] = useState(1);
+  const [flavorCounts, setFlavorCounts] = useState({});
+
+  const isBagelPack = item?.name === 'Bagels' && item?.options?.length > 0;
 
   useEffect(() => {
     if (item) {
       setSelectedOption(item.options?.[0] || null);
       setQuantity(1);
+      setFlavorCounts(Object.fromEntries((item.options || []).map(opt => [opt, 0])));
     }
   }, [item]);
 
   if (!item) return null;
 
   const unitPrice = parseFloat(item.price) || 0;
-  const totalPrice = unitPrice * quantity;
+  const totalPrice = isBagelPack ? unitPrice : unitPrice * quantity;
+
+  const flavorTotal = Object.values(flavorCounts).reduce((sum, n) => sum + n, 0);
+  const isPackComplete = flavorTotal === BAGEL_PACK_SIZE;
+
+  const adjustFlavor = (flavor, delta) => {
+    setFlavorCounts(prev => {
+      const next = (prev[flavor] || 0) + delta;
+      if (next < 0 || flavorTotal + delta > BAGEL_PACK_SIZE) return prev;
+      return { ...prev, [flavor]: next };
+    });
+  };
+
+  const handleAddToCart = () => {
+    if (isBagelPack) {
+      const mix = Object.entries(flavorCounts)
+        .filter(([, count]) => count > 0)
+        .map(([flavor, count]) => `${count} ${flavor}`)
+        .join(', ');
+      onAddToCart(item, mix, 1);
+    } else {
+      onAddToCart(item, selectedOption, quantity);
+    }
+  };
 
   return (
     <>
@@ -121,49 +150,93 @@ function BottomSheet({ item, isOpen, onClose, onAddToCart, formatPrice }) {
             <p className="text-amber-400 font-medium mt-1">{formatPrice(item.price)}</p>
           </div>
 
-          {/* Option chips */}
-          {item.options && item.options.length > 0 && (
-            <div className="flex flex-wrap gap-2 mb-4 justify-center">
-              {item.options.map(opt => (
+          {isBagelPack ? (
+            <>
+              {/* Build-your-own 4-pack */}
+              <div className="flex flex-col gap-3 mb-2">
+                {item.options.map(opt => (
+                  <div key={opt} className="flex items-center justify-between">
+                    <span className="text-white font-semibold">{opt}</span>
+                    <div className="flex items-center gap-4">
+                      <button
+                        onClick={() => adjustFlavor(opt, -1)}
+                        disabled={(flavorCounts[opt] || 0) === 0}
+                        className="w-8 h-8 rounded-full bg-gray-700 hover:bg-gray-600 disabled:opacity-40 disabled:hover:bg-gray-700 text-white font-bold flex items-center justify-center"
+                      >
+                        -
+                      </button>
+                      <span className="text-white font-bold w-4 text-center">{flavorCounts[opt] || 0}</span>
+                      <button
+                        onClick={() => adjustFlavor(opt, 1)}
+                        disabled={flavorTotal === BAGEL_PACK_SIZE}
+                        className="w-8 h-8 rounded-full bg-gray-700 hover:bg-gray-600 disabled:opacity-40 disabled:hover:bg-gray-700 text-white font-bold flex items-center justify-center"
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <p className={`text-center font-bold mb-5 ${isPackComplete ? 'text-purple-400' : 'text-gray-500'}`}>
+                {flavorTotal} / {BAGEL_PACK_SIZE} selected{isPackComplete ? ' ✓' : ''}
+              </p>
+
+              {/* Add to cart button */}
+              <button
+                onClick={handleAddToCart}
+                disabled={!isPackComplete}
+                className="w-full bg-purple-600 hover:bg-purple-500 disabled:bg-gray-700 disabled:text-gray-500 text-white py-4 rounded-xl font-bold text-lg transition-colors"
+              >
+                {isPackComplete ? `Add to Cart - ${formatPrice(totalPrice)}` : `Select ${BAGEL_PACK_SIZE} to add`}
+              </button>
+            </>
+          ) : (
+            <>
+              {/* Option chips */}
+              {item.options && item.options.length > 0 && (
+                <div className="flex flex-wrap gap-2 mb-4 justify-center">
+                  {item.options.map(opt => (
+                    <button
+                      key={opt}
+                      onClick={() => setSelectedOption(opt)}
+                      className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+                        selectedOption === opt
+                          ? 'bg-purple-600 text-white'
+                          : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                      }`}
+                    >
+                      {opt}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Quantity stepper */}
+              <div className="flex items-center justify-center gap-6 mb-5">
                 <button
-                  key={opt}
-                  onClick={() => setSelectedOption(opt)}
-                  className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-                    selectedOption === opt
-                      ? 'bg-purple-600 text-white'
-                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                  }`}
+                  onClick={() => setQuantity(q => Math.max(1, q - 1))}
+                  className="w-12 h-12 rounded-full bg-gray-700 hover:bg-gray-600 text-white text-xl font-bold flex items-center justify-center"
                 >
-                  {opt}
+                  -
                 </button>
-              ))}
-            </div>
+                <span className="text-2xl font-bold text-white w-8 text-center">{quantity}</span>
+                <button
+                  onClick={() => setQuantity(q => q + 1)}
+                  className="w-12 h-12 rounded-full bg-gray-700 hover:bg-gray-600 text-white text-xl font-bold flex items-center justify-center"
+                >
+                  +
+                </button>
+              </div>
+
+              {/* Add to cart button */}
+              <button
+                onClick={handleAddToCart}
+                className="w-full bg-purple-600 hover:bg-purple-500 text-white py-4 rounded-xl font-bold text-lg transition-colors"
+              >
+                Add to Cart - {formatPrice(totalPrice)}
+              </button>
+            </>
           )}
-
-          {/* Quantity stepper */}
-          <div className="flex items-center justify-center gap-6 mb-5">
-            <button
-              onClick={() => setQuantity(q => Math.max(1, q - 1))}
-              className="w-12 h-12 rounded-full bg-gray-700 hover:bg-gray-600 text-white text-xl font-bold flex items-center justify-center"
-            >
-              -
-            </button>
-            <span className="text-2xl font-bold text-white w-8 text-center">{quantity}</span>
-            <button
-              onClick={() => setQuantity(q => q + 1)}
-              className="w-12 h-12 rounded-full bg-gray-700 hover:bg-gray-600 text-white text-xl font-bold flex items-center justify-center"
-            >
-              +
-            </button>
-          </div>
-
-          {/* Add to cart button */}
-          <button
-            onClick={() => onAddToCart(item, selectedOption, quantity)}
-            className="w-full bg-purple-600 hover:bg-purple-500 text-white py-4 rounded-xl font-bold text-lg transition-colors"
-          >
-            Add to Cart - {formatPrice(totalPrice)}
-          </button>
         </div>
       </div>
     </>
